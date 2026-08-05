@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-chandyfolder-vetri-app/1b6b500d-2f78-4558-a24c-7b3e866d57dd/scratchpad/vetri-extract)",
+      "Bash(unzip -q -o \"/Users/chandyfolder/vetri-app.zip\" -d .)",
+      "Bash(awk '{ print length, NR }' src/VetriTamilNadu.jsx)",
+      "Skill(artifact-design)",
+      "Skill(artifact-design:*)",
+      "Bash(grep -n \"export default function App\\\\|const verify=\\\\|onClick={\\(\\)=>onNav\\(\\\\\"tracker\\\\\"\\)}\\\\|LogOut,l:\\\\\"Log Out\\\\\"\\\\|e=>e.stopPropagation\\(\\)\\\\|const sendOTP\\\\|const otpC=\\\\|const send=\\(x\\)\" VetriTamilNadu.jsx)"
+    ]
+  }
+}

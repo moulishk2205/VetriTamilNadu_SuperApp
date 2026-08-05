@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Upload, FileText, Image as ImageIcon, X, RefreshCw, Wallet, Lock, Check } from 'lucide-react'
 import { useC } from '@/hooks/useUi'
 import type { DocumentRequirement } from '@/lib/forms/types'
+import { mimesFor } from '@/lib/forms/docFormats'
 
 /** A satisfied document requirement — either an uploaded file or a wallet pick. */
 export interface DocFileInfo {
@@ -22,13 +23,7 @@ export interface WalletDocRef {
   type: string
 }
 
-const FORMAT_MIME: Record<string, string[]> = {
-  pdf: ['application/pdf'],
-  jpeg: ['image/jpeg', 'image/jpg'],
-  jpg: ['image/jpeg', 'image/jpg'],
-  png: ['image/png'],
-}
-const mimesFor = (formats: string[]) => formats.flatMap((f) => FORMAT_MIME[f] ?? [])
+
 
 export function DocumentUpload({
   requirement,

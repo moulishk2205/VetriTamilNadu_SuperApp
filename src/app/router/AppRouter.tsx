@@ -46,6 +46,7 @@ const DesktopGrievances = lazy(() => import('@/features/complaints/pages/Desktop
 const DesktopLocker = lazy(() => import('@/features/documents/pages/DesktopLocker'))
 const DesktopSchemes = lazy(() => import('@/features/schemes/pages/DesktopSchemes'))
 const DesktopProfile = lazy(() => import('@/features/profile/pages/DesktopProfile'))
+const DesktopServiceFlow = lazy(() => import('@/features/services/pages/DesktopServiceFlow'))
 
 // Screens migrated from the prototype consume `onNav` / `goBack` props. This
 // host injects them from the navigation adapter so no screen code changes.
@@ -79,9 +80,9 @@ function LoginRoute({ variant }: { variant: 'mobile' | 'desktop' }) {
   return <Comp onDone={() => navigate('/home')} />
 }
 // Keyed so switching between services remounts the flow (fresh prefill/state).
-function ServiceFlowRoute() {
+function ServiceFlowRoute({ desktop }: { desktop: boolean }) {
   const { id } = useParams()
-  return <ServiceFlow key={id} />
+  return desktop ? <DesktopServiceFlow key={id} /> : <ServiceFlow key={id} />
 }
 
 /**
@@ -103,7 +104,7 @@ export function AppRouter({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
         <Route element={<ProtectedRoute />}>
           <Route path="/home" element={desktop ? <DesktopDashboard /> : <Screen Comp={HomeDashboard} />} />
           <Route path="/services" element={desktop ? <DesktopServices /> : <Screen Comp={ServicesHub} />} />
-          <Route path="/service/:id" element={<ServiceFlowRoute />} />
+          <Route path="/service/:id" element={<ServiceFlowRoute desktop={desktop} />} />
           <Route path="/wallet" element={desktop ? <DesktopLocker /> : <Screen Comp={DigitalWallet} />} />
           <Route path="/complaint" element={desktop ? <DesktopGrievances /> : <Screen Comp={ComplaintModule} />} />
           <Route path="/ai" element={<Screen Comp={AIAssistant} />} />

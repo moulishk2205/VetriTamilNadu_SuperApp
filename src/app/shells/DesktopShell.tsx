@@ -17,6 +17,8 @@ const RAIL_PATHS = new Set(['/home'])
  * in a centred app-view column rather than being stretched.
  */
 const DESKTOP_NATIVE = new Set(['/home', '/services', '/tracker', '/wallet', '/complaint', '/schemes', '/profile'])
+/** Prefixes that are desktop-native (dynamic segments, e.g. /service/svc_dl). */
+const DESKTOP_NATIVE_PREFIXES = ['/service/']
 
 /**
  * Government Web Portal shell — chrome only.
@@ -32,7 +34,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
 
   const isAuth = AUTH_PATHS.has(pathname)
   const hasRail = RAIL_PATHS.has(pathname)
-  const isNative = DESKTOP_NATIVE.has(pathname)
+  const isNative = DESKTOP_NATIVE.has(pathname) || DESKTOP_NATIVE_PREFIXES.some((p) => pathname.startsWith(p))
 
   if (isAuth) {
     return (

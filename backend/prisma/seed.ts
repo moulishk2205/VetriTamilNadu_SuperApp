@@ -61,18 +61,20 @@ const SERVICES = [
   { slug: 'svc_hospital', code: 'HL-APPT', name: 'Hospital Appointment', cat: 'health', dept: 'Health & Family Welfare', fee: 'Free', time: 'Same day', validity: 'NA', produces: null, icon: 'HeartPulse', popular: false },
 ]
 
-// Mirrors src/features/schemes/catalog/schemes2026.ts (separate package —
-// cannot import from the frontend). Keep both in sync.
+// CANONICAL 2026 welfare catalogue — mirrors
+// src/features/schemes/catalog/schemes2026.ts (separate package, cannot import
+// from the frontend). This is the ONLY scheme data seeded: no padding, no
+// generated placeholders. Keep both files in sync.
 const SCHEMES = [
-  { name: 'PM Kisan Samman Nidhi', dept: 'Agriculture', benefit: '\u20b96,000 per year', score: 95, color: '#0F766E', incomeMax: 300000 },
-  { name: 'Annanin Seer Scheme', dept: 'Social Welfare & Women Empowerment', benefit: '8 g gold coin + silk saree', score: 92, color: '#DB2777', incomeMax: 250000 },
-  { name: 'Thai Maaman Thanga Modhiram Scheme', dept: 'Health & Family Welfare', benefit: '1 g gold ring for every baby born in a Government hospital', score: 88, color: '#F59E0B', incomeMax: 0 },
-  { name: 'Vetri Laptop Scheme', dept: 'Higher Education', benefit: 'Free laptop for college students', score: 85, color: '#7C3AED', incomeMax: 0 },
-  { name: 'Modern Bicycle Scheme', dept: 'School Education', benefit: 'Branded bicycle with helmet and bottle holder', score: 80, color: '#0891B2', incomeMax: 0 },
-  { name: 'Vetri Skill Training Scheme', dept: 'Labour Welfare & Skill Development', benefit: 'Industry skill training, internships and AI upskilling', score: 78, color: '#2563EB', incomeMax: 0 },
-  { name: 'Vetri Housing Scheme', dept: 'Housing & Urban Development', benefit: 'Housing assistance for eligible families', score: 74, color: '#059669', incomeMax: 300000 },
-  { name: "Vetri Women's Goat Rearing Scheme", dept: 'Animal Husbandry', benefit: 'Goat rearing support for women', score: 70, color: '#16A34A', incomeMax: 200000 },
-  { name: 'Digital Library Initiative', dept: 'School Education', benefit: 'Free digital library access for students', score: 66, color: '#8B5CF6', incomeMax: 0 },
+  { name: 'PM Kisan Samman Nidhi', nameTamil: '\u0baa\u0bbf\u0bb0\u0ba4\u0bae \u0bae\u0ba8\u0bcd\u0ba4\u0bbf\u0bb0\u0bbf \u0b95\u0bbf\u0b9a\u0bbe\u0ba9\u0bcd \u0b9a\u0bae\u0bcd\u0bae\u0bbe\u0ba9\u0bcd \u0ba8\u0bbf\u0ba4\u0bbf', dept: 'Agriculture', benefit: '\u20b96,000 per year', benefitTamil: '\u0b86\u0ba3\u0bcd\u0b9f\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u20b96,000', budget: null, score: 95, color: '#0F766E', incomeMax: 300000, purpose: 'Income support for land-holding farmer families (Government of India).' },
+  { name: 'Annanin Seer Scheme', nameTamil: '\u0b85\u0ba3\u0bcd\u0ba3\u0ba9\u0bbf\u0ba9\u0bcd \u0b9a\u0bc0\u0bb0\u0bcd \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Social Welfare & Women Empowerment', benefit: '8 g gold coin + silk saree', benefitTamil: '8 \u0b95\u0bbf\u0bb0\u0bbe\u0bae\u0bcd \u0ba4\u0b99\u0bcd\u0b95 \u0ba8\u0bbe\u0ba3\u0baf\u0bae\u0bcd + \u0baa\u0b9f\u0bcd\u0b9f\u0bc1\u0baa\u0bcd \u0baa\u0bc1\u0b9f\u0bb5\u0bc8', budget: '\u20b9812 Crore', score: 92, color: '#DB2777', incomeMax: 250000, purpose: 'Marriage assistance for eligible brides.' },
+  { name: 'Thai Maaman Thanga Modhiram Scheme', nameTamil: '\u0ba4\u0bbe\u0baf\u0bcd \u0bae\u0bbe\u0bae\u0ba9\u0bcd \u0ba4\u0b99\u0bcd\u0b95 \u0bae\u0bcb\u0ba4\u0bbf\u0bb0\u0bae\u0bcd \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Health & Family Welfare', benefit: '1 g gold ring for every baby born in a Government hospital', benefitTamil: '\u0b85\u0bb0\u0b9a\u0bc1 \u0bae\u0bb0\u0bc1\u0ba4\u0bcd\u0ba4\u0bc1\u0bb5\u0bae\u0ba9\u0bc8\u0baf\u0bbf\u0bb2\u0bcd \u0baa\u0bbf\u0bb1\u0b95\u0bcd\u0b95\u0bc1\u0bae\u0bcd \u0b92\u0bb5\u0bcd\u0bb5\u0bc6\u0bbe\u0bb0\u0bc1 \u0b95\u0bc1\u0bb4\u0ba8\u0bcd\u0ba4\u0bc8\u0b95\u0bcd\u0b95\u0bc1\u0bae\u0bcd 1 \u0b95\u0bbf\u0bb0\u0bbe\u0bae\u0bcd \u0ba4\u0b99\u0bcd\u0b95 \u0bae\u0bcb\u0ba4\u0bbf\u0bb0\u0bae\u0bcd', budget: '\u20b9560 Crore', score: 88, color: '#F59E0B', incomeMax: 0, purpose: 'Every baby born in a Government hospital receives a 1 gram gold ring.' },
+  { name: 'Vetri Laptop Scheme', nameTamil: '\u0bb5\u0bc6\u0bb1\u0bcd\u0bb1\u0bbf \u0bae\u0b9f\u0bbf\u0b95\u0bcd\u0b95\u0ba3\u0bbf\u0ba9\u0bbf \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Higher Education', benefit: 'Free laptop for college students', benefitTamil: '\u0b95\u0bb2\u0bcd\u0bb2\u0bc2\u0bb0\u0bbf \u0bae\u0bbe\u0ba3\u0bb5\u0bb0\u0bcd\u0b95\u0bb3\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u0b87\u0bb2\u0bb5\u0b9a \u0bae\u0b9f\u0bbf\u0b95\u0bcd\u0b95\u0ba3\u0bbf\u0ba9\u0bbf', budget: '\u20b92,000 Crore', score: 85, color: '#7C3AED', incomeMax: 0, purpose: 'Free laptops for college students.' },
+  { name: 'Modern Bicycle Scheme', nameTamil: '\u0ba8\u0bb5\u0bc0\u0ba9 \u0bae\u0bbf\u0ba4\u0bbf\u0bb5\u0ba3\u0bcd\u0b9f\u0bbf \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'School Education', benefit: 'Branded bicycle with helmet and bottle holder', benefitTamil: '\u0ba4\u0bb2\u0bc8\u0b95\u0bcd\u0b95\u0bb5\u0b9a\u0bae\u0bcd \u0bae\u0bb1\u0bcd\u0bb1\u0bc1\u0bae\u0bcd \u0b95\u0bc1\u0b9f\u0bc1\u0bb5\u0bc8 \u0bb5\u0bc8\u0baa\u0bcd\u0baa\u0bbe\u0ba9\u0bc1\u0b9f\u0ba9\u0bcd \u0ba8\u0bb5\u0bc0\u0ba9 \u0bae\u0bbf\u0ba4\u0bbf\u0bb5\u0ba3\u0bcd\u0b9f\u0bbf', budget: '\u20b9777 Crore', score: 80, color: '#0891B2', incomeMax: 0, purpose: 'Free branded bicycles with helmet and bottle holder for eligible students.' },
+  { name: 'Vetri Skill Training Scheme', nameTamil: '\u0bb5\u0bc6\u0bb1\u0bcd\u0bb1\u0bbf \u0ba4\u0bbf\u0bb1\u0ba9\u0bcd \u0baa\u0baf\u0bbf\u0bb1\u0bcd\u0b9a\u0bbf \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Labour Welfare & Skill Development', benefit: 'Industry skill training, internships and AI upskilling', benefitTamil: '\u0ba4\u0bc6\u0bbe\u0bb4\u0bbf\u0bb2\u0bcd\u0ba4\u0bc1\u0bb1\u0bc8 \u0ba4\u0bbf\u0bb1\u0ba9\u0bcd \u0baa\u0baf\u0bbf\u0bb1\u0bcd\u0b9a\u0bbf \u0bae\u0bb1\u0bcd\u0bb1\u0bc1\u0bae\u0bcd AI \u0ba4\u0bbf\u0bb1\u0ba9\u0bcd \u0bae\u0bc7\u0bae\u0bcd\u0baa\u0bbe\u0b9f\u0bc1', budget: null, score: 78, color: '#2563EB', incomeMax: 0, purpose: 'Industry-oriented skill development, internships and AI skill training - target: 5 lakh youth trained in AI by 2031.' },
+  { name: 'Vetri Housing Scheme', nameTamil: '\u0bb5\u0bc6\u0bb1\u0bcd\u0bb1\u0bbf \u0bb5\u0bc0\u0b9f\u0bcd\u0b9f\u0bc1\u0bb5\u0b9a\u0ba4\u0bbf \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Housing & Urban Development', benefit: 'Housing assistance for eligible families', benefitTamil: '\u0ba4\u0b95\u0bc1\u0ba4\u0bbf\u0baf\u0bbe\u0ba9 \u0b95\u0bc1\u0b9f\u0bc1\u0bae\u0bcd\u0baa\u0b99\u0bcd\u0b95\u0bb3\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u0bb5\u0bc0\u0b9f\u0bcd\u0b9f\u0bc1\u0bb5\u0b9a\u0ba4\u0bbf \u0b89\u0ba4\u0bb5\u0bbf', budget: null, score: 74, color: '#059669', incomeMax: 300000, purpose: 'Housing assistance for eligible families.' },
+  { name: "Vetri Women's Goat Rearing Scheme", nameTamil: '\u0bb5\u0bc6\u0bb1\u0bcd\u0bb1\u0bbf \u0bae\u0b95\u0bb3\u0bbf\u0bb0\u0bcd \u0b86\u0b9f\u0bc1 \u0bb5\u0bb3\u0bb0\u0bcd\u0baa\u0bcd\u0baa\u0bc1 \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Animal Husbandry', benefit: 'Goat rearing support for women', benefitTamil: '\u0bae\u0b95\u0bb3\u0bbf\u0bb0\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u0b86\u0b9f\u0bc1 \u0bb5\u0bb3\u0bb0\u0bcd\u0baa\u0bcd\u0baa\u0bc1 \u0b89\u0ba4\u0bb5\u0bbf', budget: null, score: 70, color: '#16A34A', incomeMax: 200000, purpose: 'Livelihood support for women through goat rearing.' },
+  { name: 'Digital Library Initiative', nameTamil: '\u0b9f\u0bbf\u0b9c\u0bbf\u0b9f\u0bcd\u0b9f\u0bb2\u0bcd \u0ba8\u0bc2\u0bb2\u0b95\u0ba4\u0bcd \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'School Education', benefit: 'Free digital library access for students', benefitTamil: '\u0bae\u0bbe\u0ba3\u0bb5\u0bb0\u0bcd\u0b95\u0bb3\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u0b87\u0bb2\u0bb5\u0b9a \u0b9f\u0bbf\u0b9c\u0bbf\u0b9f\u0bcd\u0b9f\u0bb2\u0bcd \u0ba8\u0bc2\u0bb2\u0b95 \u0b85\u0ba3\u0bc1\u0b95\u0bb2\u0bcd', budget: null, score: 66, color: '#8B5CF6', incomeMax: 0, purpose: 'Digital library access for students across Tamil Nadu.' },
 ]
 
 const FIRST = ['Arun', 'Priya', 'Karthik', 'Divya', 'Suresh', 'Lakshmi', 'Vijay', 'Meena', 'Rajesh', 'Anitha', 'Bala', 'Kavya', 'Senthil', 'Deepa', 'Ganesh', 'Revathi', 'Muthu', 'Nithya', 'Ramesh', 'Shanthi']
@@ -163,15 +165,18 @@ async function main() {
   console.log(`  ✓ ${officers.length} officers`)
 
   /* schemes --------------------------------------------------------------- */
-  for (let i = 0; i < 100; i++) {
-    const base = i < SCHEMES.length ? SCHEMES[i] : {
-      name: `TN Welfare Scheme ${i + 1}`, dept: pick(DEPARTMENTS, i), benefit: `Rs.${(rand(9) + 1) * 1000}/yr`,
-      score: 40 + rand(50), color: pick(['#059669', '#2563EB', '#7C3AED', '#DB2777'], i), incomeMax: pick([0, 100000, 250000, 500000], i),
-    }
-    const scheme = await prisma.scheme.create({ data: { name: base.name, department: base.dept, benefit: base.benefit, matchScore: base.score, color: base.color } })
+  for (const base of SCHEMES) {
+    const scheme = await prisma.scheme.create({
+      data: {
+        name: base.name, nameTamil: base.nameTamil, department: base.dept,
+        benefit: base.benefit, benefitTamil: base.benefitTamil,
+        budget: base.budget ?? undefined, purpose: base.purpose,
+        matchScore: base.score, color: base.color,
+      },
+    })
     if (base.incomeMax) await prisma.eligibilityRule.create({ data: { schemeId: scheme.id, field: 'incomeMax', op: 'lte', value: String(base.incomeMax) } })
   }
-  console.log('  ✓ 100 schemes')
+  console.log(`  \u2713 ${SCHEMES.length} welfare schemes (2026 catalogue, no placeholders)`)
 
   /* demo citizen (frontend persona — MUST be first) ----------------------- */
   const demo = await prisma.citizen.create({

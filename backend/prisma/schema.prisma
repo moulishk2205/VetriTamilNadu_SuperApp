@@ -454,10 +454,16 @@ model Notification {
 
 // ─── Schemes ─────────────────────────────────────────────────────────────────────
 model Scheme {
-  id         String            @id @default(uuid())
-  name       String
-  department String
-  benefit    String
+  id           String          @id @default(uuid())
+  name         String
+  /// Official Tamil name (2026 catalogue).
+  nameTamil    String?
+  department   String
+  benefit      String
+  benefitTamil String?
+  /// Announced budget allocation, where published.
+  budget       String?
+  purpose      String?
   matchScore Int               @default(0)
   color      String
   rules      EligibilityRule[]

@@ -37,8 +37,12 @@ export class CatalogService {
     const items = rows.map((s) => ({
       id: s.id,
       name: s.name,
+      nameTamil: s.nameTamil ?? undefined,
       department: s.department,
       benefit: s.benefit,
+      benefitTamil: s.benefitTamil ?? undefined,
+      budget: s.budget ?? undefined,
+      purpose: s.purpose ?? undefined,
       matchScore: s.matchScore,
       color: s.color,
       eligibility: Object.fromEntries(

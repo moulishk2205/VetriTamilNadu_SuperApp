@@ -11,7 +11,7 @@ function buildIndex(): SearchResult[] {
   return [
     ...db.services.map((s): SearchResult => ({ id: s.id, kind: 'service', title: s.name, subtitle: `${s.processingTime} · ${s.fee}`, path: '/services' })),
     ...db.documents.map((d): SearchResult => ({ id: d.id, kind: 'document', title: d.name, subtitle: d.number, path: '/wallet' })),
-    ...db.schemes.map((s): SearchResult => ({ id: s.id, kind: 'scheme', title: s.name, subtitle: s.benefit, path: '/schemes' })),
+    ...db.schemes.map((s): SearchResult => ({ id: s.id, kind: 'scheme', title: s.name, subtitle: [s.benefit, s.nameTamil, s.benefitTamil].filter(Boolean).join(' · '), path: '/schemes' })),
   ]
 }
 

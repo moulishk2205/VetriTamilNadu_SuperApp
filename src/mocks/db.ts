@@ -3,6 +3,7 @@ import type { AppNotification } from '@/types/models/notification'
 import type { ServiceCatalogItem, ServiceCategory } from '@/types/models/service'
 import type { Scheme } from '@/types/models/scheme'
 import type { Citizen } from '@/types/models/citizen'
+import { SCHEMES_2026, FEATURED_SCHEME } from '@/features/schemes/catalog/schemes2026'
 
 /**
  * In-memory seed database for the MSW mock backend.
@@ -23,7 +24,7 @@ export const documents: WalletDocument[] = [
 export const notifications: AppNotification[] = [
   { id: 'ntf_1', title: 'Birth Certificate Approved', body: 'Your application APP-2026-BC-1123 has been approved. Download from wallet.', category: 'application', priority: 'high', read: false, createdAt: '2026-07-07T07:00:00Z', timeLabel: '2 hours ago', icon: 'CheckCircle', color: 'ok', actionPath: '/wallet' },
   { id: 'ntf_2', title: 'Complaint Assigned', body: 'CMP-TN-000452 assigned to GCC Zone 9 officer.', category: 'complaint', priority: 'normal', read: false, createdAt: '2026-07-07T04:00:00Z', timeLabel: '5 hours ago', icon: 'AlertTriangle', color: 'warn', actionPath: '/tracker' },
-  { id: 'ntf_3', title: 'New Welfare Scheme Available', body: 'Kalaignar Insurance - You may be eligible for Rs.5L coverage.', category: 'scheme', priority: 'normal', read: true, createdAt: '2026-07-06T09:00:00Z', timeLabel: '1 day ago', icon: 'Sparkles', color: 'info', actionPath: '/schemes' },
+  { id: 'ntf_3', title: 'New Welfare Scheme Available', body: `${FEATURED_SCHEME.name} - you may be eligible for ${FEATURED_SCHEME.benefit}.`, category: 'scheme', priority: 'normal', read: true, createdAt: '2026-07-06T09:00:00Z', timeLabel: '1 day ago', icon: 'Sparkles', color: 'info', actionPath: '/schemes' },
   { id: 'ntf_4', title: 'Service Deadline Tomorrow', body: 'Income Certificate APP-2026-IC-44821 deadline is June 21.', category: 'reminder', priority: 'high', read: true, createdAt: '2026-07-06T08:00:00Z', timeLabel: '1 day ago', icon: 'Clock', color: 'err', actionPath: '/tracker' },
   { id: 'ntf_5', title: 'Document Verified', body: 'Your Community Certificate has been verified by DigiLocker.', category: 'document', priority: 'normal', read: true, createdAt: '2026-07-04T09:00:00Z', timeLabel: '3 days ago', icon: 'FileCheck', color: 'ok', actionPath: '/wallet' },
   { id: 'ntf_6', title: 'Rate Your Experience', body: 'How was your experience with the Birth Certificate service?', category: 'system', priority: 'low', read: true, createdAt: '2026-07-02T09:00:00Z', timeLabel: '5 days ago', icon: 'Star', color: 'sec' },
@@ -52,11 +53,8 @@ export const services: ServiceCatalogItem[] = [
   { id: 'svc_school', name: 'School Admission', category: 'edu', processingTime: 'Varies', fee: 'Free', popular: false, icon: 'GraduationCap' },
 ]
 
-export const schemes: Scheme[] = [
-  { id: 'sch_pmkisan', name: 'PM Kisan Samman Nidhi', department: 'Agriculture', benefit: 'Rs.6,000/yr', matchScore: 95, color: '#059669', eligibility: { incomeMax: 300000 } },
-  { id: 'sch_kalaignar', name: 'Kalaignar Insurance', department: 'Health', benefit: 'Rs.5L coverage', matchScore: 88, color: '#2563EB', eligibility: { incomeMax: 500000 } },
-  { id: 'sch_laptop', name: 'Free Laptop Scheme', department: 'Education', benefit: 'Free Laptop', matchScore: 72, color: '#7C3AED', eligibility: {} },
-]
+/** Welfare schemes — the 2026 catalogue is the single source of truth. */
+export const schemes: Scheme[] = SCHEMES_2026
 
 export const citizen: Citizen = {
   id: 'ctz_chandy',

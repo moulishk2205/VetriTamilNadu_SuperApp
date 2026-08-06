@@ -61,15 +61,18 @@ const SERVICES = [
   { slug: 'svc_hospital', code: 'HL-APPT', name: 'Hospital Appointment', cat: 'health', dept: 'Health & Family Welfare', fee: 'Free', time: 'Same day', validity: 'NA', produces: null, icon: 'HeartPulse', popular: false },
 ]
 
+// Mirrors src/features/schemes/catalog/schemes2026.ts (separate package —
+// cannot import from the frontend). Keep both in sync.
 const SCHEMES = [
-  { name: 'PM Kisan Samman Nidhi', dept: 'Agriculture', benefit: 'Rs.6,000/yr', score: 95, color: '#059669', incomeMax: 300000 },
-  { name: 'Kalaignar Magalir Urimai Thogai', dept: 'Social Welfare', benefit: 'Rs.1,000/month', score: 92, color: '#DB2777', incomeMax: 250000 },
-  { name: 'Kalaignar Insurance (CMCHIS)', dept: 'Health & Family Welfare', benefit: 'Rs.5L coverage', score: 88, color: '#2563EB', incomeMax: 500000 },
-  { name: 'Free Bus Travel for Women', dept: 'Transport', benefit: 'Zero fare', score: 85, color: '#7C3AED', incomeMax: 0 },
-  { name: 'Pudhumai Penn Scheme', dept: 'Higher Education', benefit: 'Rs.1,000/month', score: 80, color: '#F59E0B', incomeMax: 0 },
-  { name: 'Free Laptop Scheme', dept: 'School Education', benefit: 'Free Laptop', score: 72, color: '#0891B2', incomeMax: 0 },
-  { name: 'Moovalur Ramamirtham Marriage Assistance', dept: 'Social Welfare', benefit: 'Rs.25,000 + gold', score: 68, color: '#DC2626', incomeMax: 72000 },
-  { name: 'Chief Minister Breakfast Scheme', dept: 'School Education', benefit: 'Free breakfast', score: 60, color: '#16A34A', incomeMax: 0 },
+  { name: 'PM Kisan Samman Nidhi', dept: 'Agriculture', benefit: '\u20b96,000 per year', score: 95, color: '#0F766E', incomeMax: 300000 },
+  { name: 'Annanin Seer Scheme', dept: 'Social Welfare & Women Empowerment', benefit: '8 g gold coin + silk saree', score: 92, color: '#DB2777', incomeMax: 250000 },
+  { name: 'Thai Maaman Thanga Modhiram Scheme', dept: 'Health & Family Welfare', benefit: '1 g gold ring for every baby born in a Government hospital', score: 88, color: '#F59E0B', incomeMax: 0 },
+  { name: 'Vetri Laptop Scheme', dept: 'Higher Education', benefit: 'Free laptop for college students', score: 85, color: '#7C3AED', incomeMax: 0 },
+  { name: 'Modern Bicycle Scheme', dept: 'School Education', benefit: 'Branded bicycle with helmet and bottle holder', score: 80, color: '#0891B2', incomeMax: 0 },
+  { name: 'Vetri Skill Training Scheme', dept: 'Labour Welfare & Skill Development', benefit: 'Industry skill training, internships and AI upskilling', score: 78, color: '#2563EB', incomeMax: 0 },
+  { name: 'Vetri Housing Scheme', dept: 'Housing & Urban Development', benefit: 'Housing assistance for eligible families', score: 74, color: '#059669', incomeMax: 300000 },
+  { name: "Vetri Women's Goat Rearing Scheme", dept: 'Animal Husbandry', benefit: 'Goat rearing support for women', score: 70, color: '#16A34A', incomeMax: 200000 },
+  { name: 'Digital Library Initiative', dept: 'School Education', benefit: 'Free digital library access for students', score: 66, color: '#8B5CF6', incomeMax: 0 },
 ]
 
 const FIRST = ['Arun', 'Priya', 'Karthik', 'Divya', 'Suresh', 'Lakshmi', 'Vijay', 'Meena', 'Rajesh', 'Anitha', 'Bala', 'Kavya', 'Senthil', 'Deepa', 'Ganesh', 'Revathi', 'Muthu', 'Nithya', 'Ramesh', 'Shanthi']
@@ -196,7 +199,7 @@ async function main() {
     data: [
       { citizenId: demo.id, title: 'Birth Certificate Approved', body: 'Your application APP-2026-BC-1123 has been approved. Download from wallet.', category: 'application', priority: 'HIGH', read: false, actionPath: '/wallet', icon: 'CheckCircle', color: 'ok', createdAt: daysAgo(0) },
       { citizenId: demo.id, title: 'Complaint Assigned', body: 'CMP-TN-000452 assigned to GCC Zone 9 officer.', category: 'complaint', priority: 'MEDIUM', read: false, actionPath: '/tracker', icon: 'AlertTriangle', color: 'warn', createdAt: daysAgo(0) },
-      { citizenId: demo.id, title: 'New Welfare Scheme Available', body: 'Kalaignar Insurance - You may be eligible for Rs.5L coverage.', category: 'scheme', priority: 'MEDIUM', read: true, actionPath: '/schemes', icon: 'Sparkles', color: 'info', createdAt: daysAgo(1) },
+      { citizenId: demo.id, title: 'New Welfare Scheme Available', body: 'Annanin Seer Scheme - you may be eligible for an 8 g gold coin and silk saree.', category: 'scheme', priority: 'MEDIUM', read: true, actionPath: '/schemes', icon: 'Sparkles', color: 'info', createdAt: daysAgo(1) },
       { citizenId: demo.id, title: 'Service Deadline Tomorrow', body: 'Income Certificate APP-2026-IC-44821 deadline is June 21.', category: 'reminder', priority: 'HIGH', read: true, actionPath: '/tracker', icon: 'Clock', color: 'err', createdAt: daysAgo(1) },
       { citizenId: demo.id, title: 'Document Verified', body: 'Your Community Certificate has been verified by DigiLocker.', category: 'document', priority: 'MEDIUM', read: true, actionPath: '/wallet', icon: 'FileCheck', color: 'ok', createdAt: daysAgo(3) },
       { citizenId: demo.id, title: 'Rate Your Experience', body: 'How was your experience with the Birth Certificate service?', category: 'system', priority: 'LOW', read: true, icon: 'Star', color: 'sec', createdAt: daysAgo(5) },

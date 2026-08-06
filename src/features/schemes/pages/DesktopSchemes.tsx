@@ -34,7 +34,7 @@ export default function DesktopSchemes() {
   const list = useMemo(() => {
     const needle = q.toLowerCase().trim()
     return schemes
-      .filter((s) => (dept === 'all' || s.d === dept) && (!needle || s.n.toLowerCase().includes(needle) || s.b.toLowerCase().includes(needle)))
+      .filter((s) => (dept === 'all' || s.d === dept) && (!needle || [s.n, s.b, s.nTa, s.bTa].some((v) => (v ?? '').toLowerCase().includes(needle))))
       .sort((a, b) => b.m - a.m)
   }, [schemes, q, dept])
 
@@ -109,7 +109,9 @@ export default function DesktopSchemes() {
 
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 15, fontWeight: 700, color: c.txt, lineHeight: 1.35 }}>{s.n}</p>
+                  {s.nTa && <p style={{ fontSize: 12.5, color: c.txt3, marginTop: 3, fontFamily: "'Noto Sans Tamil', sans-serif" }}>{s.nTa}</p>}
                   <p style={{ fontSize: 13, color: c.txt2, marginTop: 6 }}>{s.b}</p>
+                  {s.budget && <p className="vtn-num" style={{ fontSize: 11.5, color: c.secDk, marginTop: 5, fontWeight: 600 }}>Allocation {s.budget}</p>}
                   <p style={{ fontSize: 11.5, color: c.txt3, marginTop: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Building2 size={12} />{s.d}
                   </p>

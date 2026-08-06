@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom'
-import { useC } from '@/hooks/useUi'
+import { useC, useT } from '@/hooks/useUi'
 import { useAppNavigation } from '@/hooks/useAppNavigation'
 import { keyToPath } from '@/app/router/paths'
 import { DESKTOP_NAV } from './navItems'
@@ -10,6 +10,7 @@ import { DESKTOP_NAV } from './navItems'
  */
 export function DesktopNavigation() {
   const c = useC()
+  const t = useT()
   const { onNav } = useAppNavigation()
   const { pathname } = useLocation()
 
@@ -26,7 +27,7 @@ export function DesktopNavigation() {
               style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 16px', background: 'none', border: 'none', borderBottom: `3px solid ${active ? c.pri : 'transparent'}`, color: active ? c.pri : c.txt2, fontSize: 13.5, fontWeight: active ? 700 : 500, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}
             >
               <n.icon size={16} strokeWidth={active ? 2.2 : 1.8} />
-              {n.label}
+              {t(n.label)}
             </button>
           )
         })}

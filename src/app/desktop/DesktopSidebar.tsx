@@ -1,6 +1,6 @@
 import { QrCode, User, ChevronRight, Phone, HeartPulse, Flame, Siren, BadgeCheck } from 'lucide-react'
 import { Seal } from '@/components/ui'
-import { useC } from '@/hooks/useUi'
+import { useC, useT } from '@/hooks/useUi'
 import { useAppNavigation } from '@/hooks/useAppNavigation'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { DESKTOP_NAV } from './navItems'
@@ -11,6 +11,7 @@ import { DESKTOP_NAV } from './navItems'
  */
 export function DesktopSidebar() {
   const c = useC()
+  const t = useT()
   const { onNav } = useAppNavigation()
   const { citizen } = useAuth()
 
@@ -36,11 +37,11 @@ export function DesktopSidebar() {
 
       {/* Quick links */}
       <div style={{ background: c.card, border: `1px solid ${c.bdr}`, borderRadius: 16, overflow: 'hidden' }}>
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: c.txt3, padding: '13px 16px 9px' }}>Quick Links</p>
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: c.txt3, padding: '13px 16px 9px' }}>{t('Quick Links')}</p>
         {DESKTOP_NAV.slice(1).map((n, i, arr) => (
           <button key={n.key} onClick={() => onNav(n.key)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '11px 16px', background: 'none', border: 'none', borderTop: `1px solid ${i === 0 ? c.bdr : 'transparent'}`, borderBottom: i < arr.length - 1 ? `1px solid ${c.bdr}` : 'none', cursor: 'pointer', fontSize: 13, color: c.txt, fontFamily: 'inherit', textAlign: 'left' }}>
             <n.icon size={16} color={c.pri} strokeWidth={1.8} />
-            <span style={{ flex: 1 }}>{n.label}</span>
+            <span style={{ flex: 1 }}>{t(n.label)}</span>
             <ChevronRight size={14} color={c.txt3} />
           </button>
         ))}

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { FolderOpen, Folder, FileText, Download, Share2, BadgeCheck, Pin, Clock, Hash, Building2, User } from 'lucide-react'
 import { useC } from '@/hooks/useUi'
 import { useAppNavigation } from '@/hooks/useAppNavigation'
-import { PageHeader, Toolbar, Panel, EmptyState, LoadingRows, DeskBtn, StatusChip } from '@/app/desktop/DesktopUI'
+import { PageHeader, Toolbar, Panel, EmptyState, LoadingRows, DeskBtn, StatusChip, Toast } from '@/app/desktop/DesktopUI'
 import { useDocumentsQuery, useWalletDocumentCards } from '@/features/documents/hooks/useDocuments'
 
 /**
@@ -20,6 +20,7 @@ export default function DesktopLocker() {
   const [folder, setFolder] = useState('all')
   const [selected, setSelected] = useState<string | null>(null)
   const [pinned, setPinned] = useState<string[]>([])
+  const [toast, setToast] = useState('')
 
   const folders = useMemo(() => {
     const map = new Map<string, number>()
@@ -38,6 +39,33 @@ export default function DesktopLocker() {
 
   const active = docs.find((d) => d.id === selected) ?? files[0]
   const togglePin = (id: string) => setPinned((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+
+  /** Real download: writes a verifiable document record the citizen can keep. */
+  const downloadDoc = (d: (typeof docs)[number]) => {
+    const lines = [
+      'GOVERNMENT OF TAMIL NADU \u2014 VETRI DIGITAL LOCKER',
+      'VERIFIED DOCUMENT RECORD', '',
+      `Document   : ${d.n}`,
+      `Number     : ${d.id}`,
+      `Category   : ${d.tp}`,
+      `Holder     : ${d.h}`,
+      `Validity   : ${d.v}`,
+      `Retrieved  : ${new Date().toLocaleString('en-IN')}`, '',
+      'This record was issued from the citizen\u2019s verified digital locker.',
+      'Verify authenticity at the issuing department with the number above.',
+    ]
+    const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url; a.download = `${d.id}-record.txt`; a.click()
+    URL.revokeObjectURL(url)
+    setToast(`${d.n} downloaded`)
+  }
+
+  const shareDoc = async (d: (typeof docs)[number]) => {
+    const text = `Vetri TN \u2014 ${d.n} (${d.id}), issued to ${d.h}. Valid: ${d.v}.`
+    if (navigator.share) { try { await navigator.share({ title: d.n, text }); setToast('Share sheet opened') } catch { /* dismissed */ } }
+    else { try { await navigator.clipboard.writeText(text); setToast('Document details copied to clipboard') } catch { setToast('Copy unavailable in this browser') } }
+  }
 
   const FileTile = ({ d }: { d: (typeof docs)[number] }) => {
     const isPinned = pinned.includes(d.id)
@@ -176,8 +204,8 @@ export default function DesktopLocker() {
                       ))}
                     </dl>
                     <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
-                      <DeskBtn variant="primary" icon={Download} onClick={() => onNav('wallet')}>Download</DeskBtn>
-                      <DeskBtn icon={Share2} onClick={() => onNav('wallet')}>Share</DeskBtn>
+                      <DeskBtn variant="primary" icon={Download} onClick={() => downloadDoc(active)}>Download</DeskBtn>
+                      <DeskBtn icon={Share2} onClick={() => void shareDoc(active)}>Share</DeskBtn>
                     </div>
                   </div>
                 </div>
@@ -186,6 +214,7 @@ export default function DesktopLocker() {
           </div>
         </div>
       )}
+      {toast && <Toast message={toast} onDone={() => setToast('')} />}
     </>
   )
 }

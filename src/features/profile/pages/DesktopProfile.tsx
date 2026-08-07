@@ -57,14 +57,14 @@ function Toggle({ label, desc, on, onChange, icon: Icon }: { label: string; desc
  * address, documents, security and preferences. All values come from the same
  * auth store and document query as the mobile profile.
  */
-export default function DesktopProfile() {
+export default function DesktopProfile({ initialTab = 'personal' }: { initialTab?: TabId } = {}) {
   const c = useC()
   const { onNav } = useAppNavigation()
   const { citizen, logout } = useAuth()
   const { dark, setDark, lang, setLang, textSize, setTextSize, highContrast, setHighContrast, anim, setAnim } = useApp()
   const docs = useWalletDocumentCards()
   const resetPlatform = usePlatformStore((s) => s.resetPlatform)
-  const [tab, setTab] = useState<TabId>('personal')
+  const [tab, setTab] = useState<TabId>(initialTab)
 
   const addr = citizen?.addresses ?? []
 

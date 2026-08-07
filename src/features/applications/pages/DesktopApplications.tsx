@@ -179,7 +179,9 @@ export default function DesktopApplications() {
                     )
                   })}
                 </ol>
-                <DeskBtn onClick={() => onNav('tracker')} icon={ArrowRight}>Open full tracker</DeskBtn>
+                <DeskBtn onClick={() => onNav(`service/${selected.serviceId}`)} icon={ArrowRight}>
+                  Open {selected.serviceName}
+                </DeskBtn>
               </Panel>
             </div>
           )}

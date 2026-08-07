@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { Search, Inbox } from 'lucide-react'
+import { useEffect, type ReactNode } from 'react'
+import { Search, Inbox, Check } from 'lucide-react'
 import { useC } from '@/hooks/useUi'
 
 /**
@@ -130,5 +130,20 @@ export function DeskBtn({ children, onClick, variant = 'secondary', icon: Icon }
     >
       {Icon && <Icon size={15} />}{children}
     </button>
+  )
+}
+
+/** Transient confirmation toast — announced to assistive tech. */
+export function Toast({ message, onDone, ms = 2600 }: { message: string; onDone: () => void; ms?: number }) {
+  const c = useC()
+  useEffect(() => {
+    const t = setTimeout(onDone, ms)
+    return () => clearTimeout(t)
+  }, [message, ms, onDone])
+  return (
+    <div role="status" aria-live="polite"
+      style={{ position: 'sticky', bottom: 16, marginTop: 16, marginInline: 'auto', width: 'fit-content', maxWidth: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 18px', borderRadius: 12, background: c.txt, color: c.bg, fontSize: 13.5, fontWeight: 500, boxShadow: '0 10px 30px rgba(0,0,0,0.22)', zIndex: 60 }}>
+      <Check size={15} />{message}
+    </div>
   )
 }

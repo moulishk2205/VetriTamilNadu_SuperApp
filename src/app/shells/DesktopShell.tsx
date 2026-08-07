@@ -16,9 +16,15 @@ const RAIL_PATHS = new Set(['/home'])
  * fluid container. Anything not listed is a mobile-authored screen and is shown
  * in a centred app-view column rather than being stretched.
  */
-const DESKTOP_NATIVE = new Set(['/home', '/services', '/tracker', '/wallet', '/complaint', '/schemes', '/profile'])
+const DESKTOP_NATIVE = new Set([
+  '/home', '/services', '/tracker', '/wallet', '/complaint', '/schemes', '/profile',
+  '/ai', '/notifications', '/timeline', '/help', '/emergency', '/district', '/mla',
+  '/personal', '/address', '/security', '/language', '/darkmode', '/accessibility',
+])
 /** Prefixes that are desktop-native (dynamic segments, e.g. /service/svc_dl). */
 const DESKTOP_NATIVE_PREFIXES = ['/service/']
+/** Mobile-authored screens with no desktop page yet (framed app-view column). */
+const KNOWN_MOBILE_ONLY = new Set<string>([])
 
 /**
  * Government Web Portal shell — chrome only.
@@ -34,7 +40,9 @@ export function DesktopShell({ children }: { children: ReactNode }) {
 
   const isAuth = AUTH_PATHS.has(pathname)
   const hasRail = RAIL_PATHS.has(pathname)
-  const isNative = DESKTOP_NATIVE.has(pathname) || DESKTOP_NATIVE_PREFIXES.some((p) => pathname.startsWith(p))
+  // Anything not an auth route is desktop-native: every listed route has a
+  // desktop page, and unknown paths land on the desktop 404.
+  const isNative = DESKTOP_NATIVE.has(pathname) || DESKTOP_NATIVE_PREFIXES.some((p) => pathname.startsWith(p)) || !KNOWN_MOBILE_ONLY.has(pathname)
 
   if (isAuth) {
     return (

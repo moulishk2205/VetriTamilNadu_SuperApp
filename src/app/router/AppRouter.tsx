@@ -47,6 +47,13 @@ const DesktopLocker = lazy(() => import('@/features/documents/pages/DesktopLocke
 const DesktopSchemes = lazy(() => import('@/features/schemes/pages/DesktopSchemes'))
 const DesktopProfile = lazy(() => import('@/features/profile/pages/DesktopProfile'))
 const DesktopServiceFlow = lazy(() => import('@/features/services/pages/DesktopServiceFlow'))
+const DesktopAI = lazy(() => import('@/features/ai/pages/DesktopAI'))
+const DesktopNotifications = lazy(() => import('@/features/notifications/pages/DesktopNotifications'))
+const DesktopTimeline = lazy(() => import('@/features/citizen/pages/DesktopTimeline'))
+const DesktopHelp = lazy(() => import('@/features/support/pages/DesktopHelp'))
+const DesktopEmergency = lazy(() => import('@/features/emergency/pages/DesktopEmergency'))
+const DesktopTransparency = lazy(() => import('@/features/transparency/pages/DesktopTransparency'))
+const DesktopNotFound = lazy(() => import('@/features/misc/pages/DesktopNotFound'))
 
 // Screens migrated from the prototype consume `onNav` / `goBack` props. This
 // host injects them from the navigation adapter so no screen code changes.
@@ -107,22 +114,22 @@ export function AppRouter({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           <Route path="/service/:id" element={<ServiceFlowRoute desktop={desktop} />} />
           <Route path="/wallet" element={desktop ? <DesktopLocker /> : <Screen Comp={DigitalWallet} />} />
           <Route path="/complaint" element={desktop ? <DesktopGrievances /> : <Screen Comp={ComplaintModule} />} />
-          <Route path="/ai" element={<Screen Comp={AIAssistant} />} />
+          <Route path="/ai" element={desktop ? <DesktopAI /> : <Screen Comp={AIAssistant} />} />
           <Route path="/schemes" element={desktop ? <DesktopSchemes /> : <Screen Comp={SchemeDiscovery} />} />
-          <Route path="/emergency" element={<Screen Comp={EmergencyHub} />} />
-          <Route path="/mla" element={<Screen Comp={MLADashboard} />} />
-          <Route path="/district" element={<Screen Comp={DistrictScorecard} />} />
+          <Route path="/emergency" element={desktop ? <DesktopEmergency /> : <Screen Comp={EmergencyHub} />} />
+          <Route path="/mla" element={desktop ? <DesktopTransparency view="mla" /> : <Screen Comp={MLADashboard} />} />
+          <Route path="/district" element={desktop ? <DesktopTransparency view="district" /> : <Screen Comp={DistrictScorecard} />} />
           <Route path="/tracker" element={desktop ? <DesktopApplications /> : <Screen Comp={ServiceTracker} />} />
           <Route path="/profile" element={desktop ? <DesktopProfile /> : <Screen Comp={ProfileScreen} />} />
-          <Route path="/notifications" element={<Screen Comp={NotificationsScreen} />} />
-          <Route path="/help" element={<Screen Comp={HelpScreen} />} />
-          <Route path="/accessibility" element={<Screen Comp={AccessibilityScreen} />} />
-          <Route path="/personal" element={<Screen Comp={PersonalDetailsScreen} />} />
-          <Route path="/address" element={<Screen Comp={AddressScreen} />} />
-          <Route path="/security" element={<Screen Comp={SecurityScreen} />} />
-          <Route path="/language" element={<Screen Comp={LanguageScreen} />} />
-          <Route path="/darkmode" element={<Screen Comp={DarkModeScreen} />} />
-          <Route path="/timeline" element={<CitizenTimeline />} />
+          <Route path="/notifications" element={desktop ? <DesktopNotifications /> : <Screen Comp={NotificationsScreen} />} />
+          <Route path="/help" element={desktop ? <DesktopHelp /> : <Screen Comp={HelpScreen} />} />
+          <Route path="/accessibility" element={desktop ? <DesktopProfile initialTab="preferences" /> : <Screen Comp={AccessibilityScreen} />} />
+          <Route path="/personal" element={desktop ? <DesktopProfile initialTab="personal" /> : <Screen Comp={PersonalDetailsScreen} />} />
+          <Route path="/address" element={desktop ? <DesktopProfile initialTab="address" /> : <Screen Comp={AddressScreen} />} />
+          <Route path="/security" element={desktop ? <DesktopProfile initialTab="security" /> : <Screen Comp={SecurityScreen} />} />
+          <Route path="/language" element={desktop ? <DesktopProfile initialTab="preferences" /> : <Screen Comp={LanguageScreen} />} />
+          <Route path="/darkmode" element={desktop ? <DesktopProfile initialTab="preferences" /> : <Screen Comp={DarkModeScreen} />} />
+          <Route path="/timeline" element={desktop ? <DesktopTimeline /> : <CitizenTimeline />} />
         </Route>
 
         {/* Officer workspace (RBAC: application processing) */}
@@ -142,7 +149,7 @@ export function AppRouter({ variant = 'mobile' }: { variant?: 'mobile' | 'deskto
           <Route path="/admin" element={<AdminPortal />} />
         </Route>
 
-        <Route path="*" element={<NotFound />} />
+        <Route path="*" element={desktop ? <DesktopNotFound /> : <NotFound />} />
       </Routes>
     </Suspense>
   )

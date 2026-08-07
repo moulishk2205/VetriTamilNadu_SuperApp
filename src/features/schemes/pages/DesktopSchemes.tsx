@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Sparkles, Bookmark, Check, ArrowRight, Building2, Scale } from 'lucide-react'
+import { Sparkles, Bookmark, Check, ArrowRight, Building2, Scale, X, FileText } from 'lucide-react'
 import { useC } from '@/hooks/useUi'
 import { useAppNavigation } from '@/hooks/useAppNavigation'
 import { PageHeader, Toolbar, FilterChips, Panel, EmptyState, DeskBtn, StatusChip } from '@/app/desktop/DesktopUI'
@@ -24,6 +24,7 @@ export default function DesktopSchemes() {
   const [dept, setDept] = useState('all')
   const [saved, setSaved] = useState<string[]>([])
   const [compare, setCompare] = useState<string[]>([])
+  const [detail, setDetail] = useState<string | null>(null)
 
   const departments = useMemo(() => {
     const map = new Map<string, number>()
@@ -45,6 +46,7 @@ export default function DesktopSchemes() {
   }
 
   const comparing = schemes.filter((s) => compare.includes(s.n))
+  const selectedScheme = schemes.find((s) => s.n === detail)
 
   return (
     <>
@@ -57,6 +59,50 @@ export default function DesktopSchemes() {
       <Toolbar query={q} onQuery={setQ} placeholder="Search schemes by name or benefit…">
         <FilterChips options={departments} value={dept} onChange={setDept} />
       </Toolbar>
+
+      {/* Scheme detail — real content, no dead end */}
+      {selectedScheme && (
+        <div style={{ marginBottom: 24 }}>
+          <Panel
+            title={selectedScheme.n}
+            action={<button onClick={() => setDetail(null)} aria-label="Close scheme detail" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={17} color={c.txt3} /></button>}
+          >
+            {selectedScheme.nTa && <p style={{ fontSize: 14, color: c.txt2, fontFamily: "'Noto Sans Tamil', sans-serif" }}>{selectedScheme.nTa}</p>}
+            <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', marginTop: 16 }}>
+              <div>
+                <dl style={{ display: 'grid', gap: 12 }}>
+                  {[
+                    { k: 'Benefit', v: selectedScheme.b },
+                    { k: 'Department', v: selectedScheme.d },
+                    { k: 'Budget allocation', v: selectedScheme.budget ?? 'Published with the departmental budget' },
+                    { k: 'Eligibility match', v: `${selectedScheme.m}% · ${band(selectedScheme.m)}` },
+                  ].map((r) => (
+                    <div key={r.k}>
+                      <dt style={{ fontSize: 11.5, color: c.txt3 }}>{r.k}</dt>
+                      <dd className="vtn-num" style={{ fontSize: 13.5, color: c.txt, fontWeight: 500, marginTop: 2 }}>{r.v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: c.txt3 }}>How to apply</p>
+                <ol style={{ marginTop: 10, paddingLeft: 18, display: 'grid', gap: 8 }}>
+                  <li style={{ fontSize: 13, color: c.txt2, lineHeight: 1.6 }}>Obtain an Income Certificate if you do not already hold a valid one.</li>
+                  <li style={{ fontSize: 13, color: c.txt2, lineHeight: 1.6 }}>Carry your Aadhaar, ration card and the certificate to your Taluk e-Sevai centre.</li>
+                  <li style={{ fontSize: 13, color: c.txt2, lineHeight: 1.6 }}>The department verifies eligibility and sanctions the benefit.</li>
+                </ol>
+                <p style={{ fontSize: 11.5, color: c.txt3, marginTop: 12, paddingTop: 11, borderTop: `1px solid ${c.bdr}`, lineHeight: 1.55 }}>
+                  Online scheme enrolment is not yet available in Vetri. Applying for the prerequisite certificate below is fully online.
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                  <DeskBtn variant="primary" icon={FileText} onClick={() => onNav('service/svc_income')}>Apply for Income Certificate</DeskBtn>
+                  <DeskBtn icon={Sparkles} onClick={() => onNav('ai')}>Ask Vetri about this scheme</DeskBtn>
+                </div>
+              </div>
+            </div>
+          </Panel>
+        </div>
+      )}
 
       {/* Comparison tray */}
       {comparing.length > 1 && (
@@ -130,7 +176,7 @@ export default function DesktopSchemes() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: `1px solid ${c.bdr}`, flexWrap: 'wrap' }}>
-                  <DeskBtn variant="primary" icon={ArrowRight} onClick={() => onNav('schemes')}>Apply</DeskBtn>
+                  <DeskBtn variant="primary" icon={ArrowRight} onClick={() => setDetail(s.n)}>View &amp; apply</DeskBtn>
                   <button
                     onClick={() => toggle(compare, setCompare, s.n, 3)}
                     aria-pressed={inCompare}

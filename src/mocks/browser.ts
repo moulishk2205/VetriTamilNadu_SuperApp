@@ -12,13 +12,19 @@ import { env } from '@/config/env'
 export async function enableMocking(): Promise<void> {
   if (!env.enableMocks) return
 
-  const [{ setupWorker }, { handlers }] = await Promise.all([
-    import('msw/browser'),
-    import('./handlers'),
-  ])
-  const worker = setupWorker(...handlers)
-  await worker.start({
-    onUnhandledRequest: 'bypass',
-    quiet: false,
-  })
+  try {
+    const [{ setupWorker }, { handlers }] = await Promise.all([
+      import('msw/browser'),
+      import('./handlers'),
+    ])
+    const worker = setupWorker(...handlers)
+    await worker.start({
+      onUnhandledRequest: 'bypass',
+      quiet: false,
+    })
+  } catch (err) {
+    // A mock-worker failure must never stop the application from mounting —
+    // the app simply falls through to the real backend at env.apiBaseUrl.
+    console.warn('[vetri] MSW did not start; continuing against the live API.', err)
+  }
 }

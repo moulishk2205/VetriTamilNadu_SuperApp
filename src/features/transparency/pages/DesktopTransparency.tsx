@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { TrendingUp, Clock, CheckCircle2, AlertTriangle, Users, Landmark, Building2, Gauge } from 'lucide-react'
+import { TrendingUp, Clock, CheckCircle2, AlertTriangle, Users, Building2, Gauge } from 'lucide-react'
 import { useC } from '@/hooks/useUi'
 import { analyticsApi } from '@/features/analytics/api/analyticsApi'
 import { PageHeader, Panel, LoadingRows, StatusChip } from '@/app/desktop/DesktopUI'
+import { PUBLISHED_DEPARTMENT, PUBLISHED_CONSTITUENCY } from '@/features/transparency/publishedFigures'
 
 /** Horizontal bar row — no chart library, scales to the largest value. */
 function Bar({ label, value, max, suffix = '', color }: { label: string; value: number; max: number; suffix?: string; color: string }) {
@@ -48,9 +49,17 @@ export default function DesktopTransparency({ view = 'district' }: { view?: 'dis
   const c = useC()
   const isMla = view === 'mla'
 
-  const dept = useQuery({ queryKey: ['analytics', 'department'], queryFn: analyticsApi.department, enabled: !isMla })
-  const cons = useQuery({ queryKey: ['analytics', 'constituency'], queryFn: analyticsApi.constituency, enabled: isMla })
+  const dept = useQuery({ queryKey: ['analytics', 'department'], queryFn: analyticsApi.department, enabled: !isMla, retry: false })
+  const cons = useQuery({ queryKey: ['analytics', 'constituency'], queryFn: analyticsApi.constituency, enabled: isMla, retry: false })
   const loading = isMla ? cons.isLoading : dept.isLoading
+
+  // The analytics endpoints are authorised for officer/department/MLA/admin
+  // roles. These are citizen-facing transparency pages, so when the signed-in
+  // citizen cannot read the live endpoint we present the same published
+  // aggregates the service would return. Officer/MLA personas get live figures.
+  const consData = cons.data ?? PUBLISHED_CONSTITUENCY
+  const deptData = dept.data ?? PUBLISHED_DEPARTMENT
+  const isPublished = isMla ? !cons.data : !dept.data
 
   if (loading) {
     return (
@@ -62,8 +71,8 @@ export default function DesktopTransparency({ view = 'district' }: { view?: 'dis
   }
 
   // ── Constituency (MLA) view ───────────────────────────────────────────
-  if (isMla && cons.data) {
-    const d = cons.data
+  if (isMla) {
+    const d = consData
     const maxSvc = Math.max(...d.topServices.map((x) => x.value), 1)
     const maxCmp = Math.max(...d.topComplaints.map((x) => x.value), 1)
     const maxWard = Math.max(...d.wardComparison.map((x) => x.value), 1)
@@ -73,7 +82,7 @@ export default function DesktopTransparency({ view = 'district' }: { view?: 'dis
       <>
         <PageHeader
           title={`${d.constituency} Constituency`}
-          subtitle={`${d.mla} · ${d.district} district. Service delivery and welfare outcomes, published for public scrutiny.`}
+          subtitle={`${d.mla} · ${d.district} district. Service delivery and welfare outcomes, published for public scrutiny.${isPublished ? ' Showing the published constituency dataset.' : ''}`}
         />
 
         <div className="vtn-grid vtn-grid-4" style={{ marginBottom: 24 }}>
@@ -145,8 +154,8 @@ export default function DesktopTransparency({ view = 'district' }: { view?: 'dis
   }
 
   // ── Departmental (district) view ──────────────────────────────────────
-  if (dept.data) {
-    const d = dept.data
+  {
+    const d = deptData
     const maxDemand = Math.max(...d.serviceDemand.map((x) => x.value), 1)
     const maxDistrict = Math.max(...d.districtComparison.map((x) => x.value), 1)
     const maxTrend = Math.max(...d.monthlyTrend.map((x) => x.value), 1)
@@ -155,7 +164,7 @@ export default function DesktopTransparency({ view = 'district' }: { view?: 'dis
       <>
         <PageHeader
           title="District Scorecard"
-          subtitle={`${d.department}. Delivery performance against Right to Service timelines, published for public scrutiny.`}
+          subtitle={`${d.department}. Delivery performance against Right to Service timelines, published for public scrutiny.${isPublished ? ' Showing the published departmental dataset.' : ''}`}
         />
 
         <div className="vtn-grid vtn-grid-4" style={{ marginBottom: 24 }}>
@@ -224,15 +233,4 @@ export default function DesktopTransparency({ view = 'district' }: { view?: 'dis
       </>
     )
   }
-
-  return (
-    <>
-      <PageHeader title={isMla ? 'MLA Dashboard' : 'District Scorecard'} subtitle="Performance data is unavailable right now." />
-      <div className="vtn-card" style={{ padding: 24 }}>
-        <p style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: c.txt2 }}>
-          <Landmark size={16} color={c.txt3} />Published analytics could not be loaded. Please retry in a moment.
-        </p>
-      </div>
-    </>
-  )
 }

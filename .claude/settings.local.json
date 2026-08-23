@@ -6,7 +6,9 @@
       "Bash(awk '{ print length, NR }' src/VetriTamilNadu.jsx)",
       "Skill(artifact-design)",
       "Skill(artifact-design:*)",
-      "Bash(grep -n \"export default function App\\\\|const verify=\\\\|onClick={\\(\\)=>onNav\\(\\\\\"tracker\\\\\"\\)}\\\\|LogOut,l:\\\\\"Log Out\\\\\"\\\\|e=>e.stopPropagation\\(\\)\\\\|const sendOTP\\\\|const otpC=\\\\|const send=\\(x\\)\" VetriTamilNadu.jsx)"
+      "Bash(grep -n \"export default function App\\\\|const verify=\\\\|onClick={\\(\\)=>onNav\\(\\\\\"tracker\\\\\"\\)}\\\\|LogOut,l:\\\\\"Log Out\\\\\"\\\\|e=>e.stopPropagation\\(\\)\\\\|const sendOTP\\\\|const otpC=\\\\|const send=\\(x\\)\" VetriTamilNadu.jsx)",
+      "Bash(git clone *)",
+      "Bash(ls -la /Users/chandyfolder/emilkowalski-skills)"
     ]
   }
 }

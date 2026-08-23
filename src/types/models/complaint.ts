@@ -14,10 +14,19 @@ export const ComplaintSchema = z.object({
   description: z.string(),
   priority: ComplaintPriority,
   status: ComplaintStatus,
-  departmentId: z.string().optional(),
-  department: z.string().optional(),
-  etaDays: z.number().int().optional(),
-  location: z.object({ ward: z.string().optional(), area: z.string().optional(), lat: z.number().optional(), lng: z.number().optional() }).optional(),
+  departmentId: z.string().nullish(),
+  department: z.string().nullish(),
+  etaDays: z.number().int().nullish(),
+  // The API returns explicit nulls for unset coordinates, so accept null as
+  // well as undefined — `.optional()` alone rejects null and fails the parse.
+  location: z
+    .object({
+      ward: z.string().nullish(),
+      area: z.string().nullish(),
+      lat: z.number().nullish(),
+      lng: z.number().nullish(),
+    })
+    .nullish(),
   attachmentIds: z.array(z.string()).default([]),
   createdAt: z.string(),
   updatedAt: z.string(),

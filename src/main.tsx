@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/authStore'
 // Start the MSW mock backend only if it's explicitly enabled (VITE_ENABLE_MSW=true);
 // otherwise this resolves immediately and the app talks to the real backend. Then
 // mount the provider stack once the (possible) worker is ready.
-void enableMocking().then(() => {
+void enableMocking().catch(() => undefined).then(() => {
   // Re-arm the token-refresh handler for a persisted session.
   useAuthStore.getState().bootstrap()
   const rootEl = document.getElementById('root')

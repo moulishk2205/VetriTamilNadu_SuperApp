@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { CheckCircle2, Circle, MapPin, Building2, Hash, CalendarDays, AlertTriangle, Paperclip, Plus } from 'lucide-react'
 import { useC } from '@/hooks/useUi'
-import { useAppNavigation } from '@/hooks/useAppNavigation'
 import { PageHeader, Toolbar, FilterChips, Panel, StatusChip, EmptyState, LoadingRows, DeskBtn } from '@/app/desktop/DesktopUI'
 import { useComplaintsQuery } from '@/features/complaints/hooks/useComplaints'
+import { FileGrievancePanel } from '@/features/complaints/pages/FileGrievancePanel'
 
 const STEPS = ['submitted', 'assigned', 'inProgress', 'resolved'] as const
 const STEP_LABEL: Record<string, string> = { submitted: 'Submitted', assigned: 'Assigned to department', inProgress: 'Work in progress', resolved: 'Resolved' }
@@ -19,12 +19,12 @@ const fmtDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-IN
  */
 export default function DesktopGrievances() {
   const c = useC()
-  const { onNav } = useAppNavigation()
   const { data, isLoading } = useComplaintsQuery()
 
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [filing, setFiling] = useState(false)
 
   const items = useMemo(() => data ?? [], [data])
 
@@ -53,7 +53,7 @@ export default function DesktopGrievances() {
       <PageHeader
         title="Grievances"
         subtitle="Report civic issues to the responsible department and follow their resolution against published service timelines."
-        actions={<DeskBtn variant="primary" icon={Plus} onClick={() => onNav('complaint')}>File a grievance</DeskBtn>}
+        actions={<DeskBtn variant="primary" icon={Plus} onClick={() => setFiling(true)}>File a grievance</DeskBtn>}
       />
 
       <Toolbar query={q} onQuery={setQ} placeholder="Search by category, reference or description…">
@@ -68,6 +68,8 @@ export default function DesktopGrievances() {
         />
       </Toolbar>
 
+      {filing && <FileGrievancePanel onClose={() => setFiling(false)} />}
+
       {isLoading ? (
         <div className="vtn-card"><LoadingRows rows={4} /></div>
       ) : items.length === 0 ? (
@@ -75,7 +77,7 @@ export default function DesktopGrievances() {
           <EmptyState
             title="No grievances filed"
             desc="Report road damage, water supply, streetlight, drainage or sanitation issues. Each report is routed to the responsible department with a tracking number."
-            action={<DeskBtn variant="primary" onClick={() => onNav('complaint')}>File your first grievance</DeskBtn>}
+            action={<DeskBtn variant="primary" onClick={() => setFiling(true)}>File your first grievance</DeskBtn>}
           />
         </div>
       ) : (

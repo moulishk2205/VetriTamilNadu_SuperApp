@@ -1,6 +1,7 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
-import { ApplicationStage, Officer } from '@prisma/client'
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common'
+import { ApplicationStage, Officer, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
+import type { JwtUser } from '../../common/decorators/current-user.decorator'
 import { ApplicationsService } from '../applications/applications.service'
 import { WorkflowEngine } from '../workflow/workflow.engine'
 
@@ -16,29 +17,25 @@ export class OfficerService {
     private readonly engine: WorkflowEngine,
   ) {}
 
-  private async me(): Promise<Officer> {
-    const officer = await this.prisma.officer.findFirst({ orderBy: { createdAt: 'asc' } })
-    if (!officer) throw new NotFoundException('No officer provisioned')
-    return officer
-  }
-
-  async queue() {
-    const officer = await this.me()
+  async queue(user: JwtUser) {
+    const officer = await this.apps.officerFor(user)
     const rows = await this.prisma.application.findMany({
-      where: { deletedAt: null }, orderBy: { createdAt: 'desc' },
+      where: this.apps.officerScope(officer), orderBy: { createdAt: 'desc' },
       include: { officer: true, department: true, remarks: true },
     })
     const items = rows.map((a) => this.apps.toDto(a, a.officer, a.department?.name))
     return { officer: this.officerDto(officer), items, total: items.length }
   }
 
-  async stats() {
+  async stats(user: JwtUser) {
+    const scope = this.apps.officerScope(await this.apps.officerFor(user))
+    const count = (where: Prisma.ApplicationWhereInput) => this.prisma.application.count({ where: { AND: [scope, where] } })
     const [pending, escalated, corrections, dueToday, highPriority] = await Promise.all([
-      this.prisma.application.count({ where: { stage: NON_TERMINAL, deletedAt: null } }),
-      this.prisma.application.count({ where: { stage: ApplicationStage.escalation } }),
-      this.prisma.application.count({ where: { stage: ApplicationStage.correctionRequested } }),
-      this.prisma.application.count({ where: { stage: { in: [ApplicationStage.approval, ApplicationStage.inspection] } } }),
-      this.prisma.application.count({ where: { serviceSlug: { in: ['svc_income', 'svc_community'] }, stage: NON_TERMINAL } }),
+      count({ stage: NON_TERMINAL }),
+      count({ stage: ApplicationStage.escalation }),
+      count({ stage: ApplicationStage.correctionRequested }),
+      count({ stage: { in: [ApplicationStage.approval, ApplicationStage.inspection] } }),
+      count({ serviceSlug: { in: ['svc_income', 'svc_community'] }, stage: NON_TERMINAL }),
     ])
     return {
       pending, dueToday, highPriority, escalated, corrections,
@@ -47,9 +44,9 @@ export class OfficerService {
     }
   }
 
-  async action(idOrRef: string, input: ActionInput) {
-    const app = await this.apps.getRaw(idOrRef)
-    const officer = await this.me()
+  async action(idOrRef: string, input: ActionInput, user: JwtUser) {
+    const officer = await this.apps.officerFor(user)
+    const app = await this.apps.getRawForOfficer(idOrRef, officer)
     const actor = `${officer.name} (${officer.designation})`
     const service = await this.prisma.service.findUnique({ where: { slug: app.serviceSlug } })
     const svcName = service?.name ?? app.serviceName
@@ -57,26 +54,31 @@ export class OfficerService {
 
     switch (input.action) {
       case 'approve': {
-        const ok = await this.apps.transitionTo(app, ApplicationStage.completed)
-        if (!ok) throw new ConflictException('Cannot approve from this stage')
-        await this.writeAudit(actor, 'approve+issue', app.referenceNo, input.note)
-        await this.notify(app.citizenId, 'Application Approved', `${svcName} ${app.referenceNo} approved by ${officer.name}. Certificate issued to your Wallet.`, '/wallet', 'CheckCircle', 'ok', 'application')
+        // One legal step only. Issuing a certificate takes the full sequence of
+        // approvals (approval → digital signature → generation → delivery).
+        const to = await this.apps.step(app, officer)
+        if (!to) throw new ConflictException('Cannot approve from this stage')
+        await this.writeAudit(actor, 'approve', app.referenceNo, input.note ? `→ ${to}: ${input.note}` : `→ ${to}`)
+        // Certificate delivery sends its own "Certificate Ready" notice.
+        if (to !== ApplicationStage.walletDelivery) {
+          await this.notify(app.citizenId, 'Application Progressed', `${svcName} ${app.referenceNo} moved to ${this.engine.stage(to)?.label ?? to} by ${officer.name}.`, '/tracker', 'CheckCircle', 'ok', 'application')
+        }
         break
       }
       case 'reject': {
-        if (!(await this.apps.transitionTo(app, ApplicationStage.rejected))) throw new ConflictException('Cannot reject from this stage')
+        if (!(await this.apps.transitionTo(app, ApplicationStage.rejected, officer))) throw new ConflictException('Cannot reject from this stage')
         await this.writeAudit(actor, 'reject', app.referenceNo, input.note)
         await this.notify(app.citizenId, 'Application Rejected', `${svcName} ${app.referenceNo} was rejected. Reason: ${input.note ?? 'see remarks'}. You may re-apply.`, '/tracker', 'AlertTriangle', 'err', 'application')
         break
       }
       case 'correction': {
-        if (!(await this.apps.transitionTo(app, ApplicationStage.correctionRequested))) throw new ConflictException('Cannot request correction from this stage')
+        if (!(await this.apps.transitionTo(app, ApplicationStage.correctionRequested, officer))) throw new ConflictException('Cannot request correction from this stage')
         await this.writeAudit(actor, 'request-correction', app.referenceNo, input.note)
         await this.notify(app.citizenId, 'Correction Requested', `${svcName} ${app.referenceNo}: ${input.note ?? 'additional documents required'}.`, '/tracker', 'AlertTriangle', 'warn', 'application')
         break
       }
       case 'escalate': {
-        if (!(await this.apps.transitionTo(app, ApplicationStage.escalation))) throw new ConflictException('Cannot escalate from this stage')
+        if (!(await this.apps.transitionTo(app, ApplicationStage.escalation, officer))) throw new ConflictException('Cannot escalate from this stage')
         await this.writeAudit(actor, 'escalate', app.referenceNo, input.note)
         await this.notify(app.citizenId, 'Application Escalated', `${svcName} ${app.referenceNo} escalated to senior officer.`, '/tracker', 'AlertTriangle', 'warn', 'application')
         break
@@ -93,7 +95,7 @@ export class OfficerService {
       default:
         throw new BadRequestException(`Unknown action ${input.action}`)
     }
-    return this.apps.get(idOrRef)
+    return this.apps.get(app.id)
   }
 
   /** Audit trail consumed by the Admin Portal. */

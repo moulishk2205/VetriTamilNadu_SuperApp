@@ -32,19 +32,20 @@ overrides/aliases.)
 |---|---|---|---|
 | `POST /api/auth/otp/request` | auth.ts | `auth` | public |
 | `POST /api/auth/verify` | auth.ts | `auth` | public |
+| `POST /api/auth/demo` | auth.ts | `auth` | public, 404 unless `AUTH_MOCK=true` |
 | `POST /api/auth/refresh` | auth.ts | `auth` | public |
 | `POST /api/auth/logout` | auth.ts | `auth` | bearer |
 | `GET  /api/services` | catalog.ts | `catalog` | public |
 | `GET  /api/service-categories` | catalog.ts | `catalog` | public |
 | `GET  /api/schemes` | catalog.ts | `catalog` | public |
 | `GET  /api/applications` | applications.ts | `applications` | citizen |
-| `GET  /api/applications/:id` | applications.ts | `applications` | bearer |
+| `GET  /api/applications/:id` | applications.ts | `applications` | citizen (owner) |
 | `POST /api/applications` | applications.ts | `applications` | citizen |
-| `POST /api/applications/:id/advance` | applications.ts | `applications` | bearer |
+| `POST /api/applications/:id/advance` | applications.ts | `applications` | officer (own jurisdiction) |
 | `GET  /api/documents` | documents.ts | `documents` | citizen |
-| `GET  /api/documents/:id` | documents.ts | `documents` | bearer |
+| `GET  /api/documents/:id` | documents.ts | `documents` | citizen (owner) |
 | `GET  /api/notifications` | notifications.ts | `notifications` | citizen |
-| `PATCH /api/notifications/:id/read` | notifications.ts | `notifications` | bearer |
+| `PATCH /api/notifications/:id/read` | notifications.ts | `notifications` | citizen (owner) |
 | `POST /api/notifications/read-all` | notifications.ts | `notifications` | citizen |
 | `POST /api/admin/broadcast` | notifications.ts | `notifications` | admin |
 | `GET  /api/citizen/me` | citizen.ts | `citizen` | citizen |

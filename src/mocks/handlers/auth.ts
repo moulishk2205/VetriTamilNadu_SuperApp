@@ -14,23 +14,25 @@ const mkTokens = () => ({
  * request/response *shapes* are production-accurate, so a real backend drops in
  * without client changes.
  *
- * Phase 3: `verify` accepts an optional `role` (citizen default) and returns
- * that role's RBAC permission set — this powers the Officer / MLA / Admin
- * portals and Demo Mode persona switching through the same session pipeline.
+ * Like the real backend, `verify` never takes a role (it always signs in the
+ * citizen) and Demo Mode personas go through `/auth/demo`.
  */
+
+const session = (role: Role) => ({
+  tokens: mkTokens(),
+  citizen: db.citizen,
+  role,
+  permissions: permissionsForRole(role),
+  session: { id: `sess_${Date.now()}` },
+})
 export const authHandlers = [
   http.post('/api/auth/otp/request', () => HttpResponse.json({ sent: true, channel: 'sms' })),
 
-  http.post('/api/auth/verify', async ({ request }) => {
-    const body = (await request.json().catch(() => ({}))) as { role?: Role }
-    const role: Role = body.role ?? 'citizen'
-    return HttpResponse.json({
-      tokens: mkTokens(),
-      citizen: db.citizen,
-      role,
-      permissions: permissionsForRole(role),
-      session: { id: `sess_${Date.now()}` },
-    })
+  http.post('/api/auth/verify', () => HttpResponse.json(session('citizen'))),
+
+  http.post('/api/auth/demo', async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as { persona?: Role }
+    return HttpResponse.json(session(body.persona ?? 'citizen'))
   }),
 
   http.post('/api/auth/refresh', () => HttpResponse.json(mkTokens())),

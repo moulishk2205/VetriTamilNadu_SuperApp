@@ -17,31 +17,40 @@ the frontend (no component code changes).
 
 ```bash
 cd backend
-cp .env.example .env            # defaults work as-is for local Docker
-docker compose up --build       # postgres + redis + backend + pgAdmin
+# Secrets have no defaults; compose refuses to start without them.
+export POSTGRES_PASSWORD=$(openssl rand -hex 16) REDIS_PASSWORD=$(openssl rand -hex 16)
+export JWT_ACCESS_SECRET=$(openssl rand -hex 32)
+# Demo only: fixed OTP + Demo Mode personas, and seed an empty database.
+export AUTH_MOCK=true SEED_ON_BOOT=true
+docker compose up --build       # postgres + redis + backend
 ```
 
-On boot the backend waits for Postgres, syncs the schema (`prisma db push`),
-seeds realistic TN demo data **if the DB is empty**, then starts.
+On boot the backend applies committed migrations (`prisma migrate deploy`). It
+seeds demo data only when `SEED_ON_BOOT=true` **and** the database is empty; a
+failed check stops the boot rather than reseeding. The container runs as the
+unprivileged `node` user.
 
 | Service   | URL                              |
 |-----------|----------------------------------|
 | API       | http://localhost:4000/api        |
 | Swagger   | http://localhost:4000/api/docs   |
-| Health    | http://localhost:4000/health     |
-| pgAdmin   | http://localhost:5050 (admin@vetri.tn / admin) |
-| Postgres  | localhost:5432 (vetri / vetri)   |
-| Redis     | localhost:6379                   |
+| Health    | http://localhost:4000/health (503 when the database is down) |
+
+Postgres and Redis are not published on the host. For local development add the
+loopback-only override: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up postgres redis`.
+
+A database first created by the old `prisma db push` boot has no migration
+history. Baseline it once (see `docker-entrypoint.sh`) before upgrading.
 
 ## Quick start (local, no Docker)
 
 ```bash
 cd backend
 npm install
-cp .env.example .env             # point DATABASE_URL at your Postgres
+cp .env.example .env             # set DATABASE_URL and JWT_ACCESS_SECRET
 npx prisma generate
-npx prisma db push               # or: npm run prisma:migrate
-npm run db:seed
+npm run prisma:deploy            # apply committed migrations
+npm run db:seed                  # refuses a non-empty DB unless SEED_FORCE=true
 npm run start:dev                # http://localhost:4000/api
 ```
 
@@ -115,9 +124,16 @@ client in is invisible to callers.
 
 The seed provisions the exact frontend persona as the **first** citizen
 (`Chandramoulishwarar K`, `TN-2024-XXXX-8842`) with the same 4 wallet documents,
-6 notifications and life-timeline the UI expects. OTP is fixed to **`123456`** in
-mock mode. Switch personas (officer/department/MLA/admin) by passing `role` to
-`/auth/verify` — Demo Mode in the frontend does this automatically.
+6 notifications and life-timeline the UI expects.
+
+Demo auth exists only while `AUTH_MOCK=true` (default OFF when
+`NODE_ENV=production`). Then the OTP is fixed to **`123456`**, a mobile that
+matches no citizen signs in as the demo citizen, and `POST /auth/demo
+{"persona":"officer"}` (citizen/officer/department/mla/admin) gives each persona
+its own user record. Demo Mode in the frontend calls it. With `AUTH_MOCK` off,
+`/auth/demo` is a 404, OTPs are random, and `/auth/verify` never accepts a role:
+the role always comes from the user record. Biometric login is rejected until a
+UIDAI registered-device verifier exists.
 
 ## Seeded volume
 

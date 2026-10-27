@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { Application, ApplicationStage, Officer } from '@prisma/client'
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { Application, ApplicationStage, Officer, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
+import type { JwtUser } from '../../common/decorators/current-user.decorator'
 import { STAGES, WorkflowEngine } from '../workflow/workflow.engine'
 import type { CreateApplicationDto } from './dto/create-application.dto'
 
@@ -68,32 +69,63 @@ export class ApplicationsService {
     return this.toDto(app, app.officer, app.department?.name)
   }
 
-  /** Advance one legal step, with officer assignment + certificate delivery side effects.
-   *  Scoped to the owning citizen so one citizen can't drive another's application. */
-  async advance(idOrRef: string, ownerCitizenId?: string) {
-    const { app } = await this.find(idOrRef)
-    if (ownerCitizenId && app.citizenId !== ownerCitizenId) throw new NotFoundException('Application not found')
-    const next = this.engine.next(app.stage)
-    if (!next) return this.get(idOrRef)
-    await this.applyTransition(app, next)
-    return this.get(idOrRef)
+  /** The officer behind a staff token. Only OFFICER tokens carry one. */
+  async officerFor(user: JwtUser): Promise<Officer> {
+    const officer = user.officerId ? await this.prisma.officer.findUnique({ where: { id: user.officerId } }) : null
+    if (!officer) throw new ForbiddenException('This action requires an officer profile')
+    return officer
   }
 
-  /** Move an application to a target stage along a legal path (used by officer actions). */
-  async transitionTo(app: Application, target: ApplicationStage): Promise<boolean> {
+  /** An officer's jurisdiction: applications assigned to them, plus unassigned
+   *  ones from citizens in their district. Never the statewide table. */
+  officerScope(officer: Officer): Prisma.ApplicationWhereInput {
+    return {
+      deletedAt: null,
+      OR: [{ officerId: officer.id }, { officerId: null, citizen: { district: officer.district } }],
+    }
+  }
+
+  /** Raw entity for officer-side operations; outside the officer's scope it is not found. */
+  async getRawForOfficer(idOrRef: string, officer: Officer): Promise<Application> {
+    const app = await this.prisma.application.findFirst({
+      where: { AND: [{ OR: [{ id: idOrRef }, { referenceNo: idOrRef }] }, this.officerScope(officer)] },
+    })
+    if (!app) throw new NotFoundException('Application not found')
+    return app
+  }
+
+  /** Officer moves an application ONE legal step along the primary path. */
+  async advance(idOrRef: string, officer: Officer) {
+    const app = await this.getRawForOfficer(idOrRef, officer)
+    if (!(await this.step(app, officer))) throw new ConflictException('Application is already closed')
+    return this.get(app.id)
+  }
+
+  /** One legal step forward, or null when the application is terminal. */
+  async step(app: Application, officer: Officer): Promise<ApplicationStage | null> {
+    const next = this.engine.next(app.stage)
+    if (!next) return null
+    await this.applyTransition(app, next, officer)
+    return next
+  }
+
+  /** Move an application to a target stage along a legal path (reject, correction,
+   *  escalate). None of those paths passes certificate delivery. */
+  async transitionTo(app: Application, target: ApplicationStage, officer: Officer): Promise<boolean> {
     const path = this.engine.pathTo(app.stage, target)
     if (!path) return false
     let cur = app
-    for (const stage of path) cur = await this.applyTransition(cur, stage)
+    for (const stage of path) cur = await this.applyTransition(cur, stage, officer)
     return true
   }
 
-  private async applyTransition(app: Application, to: ApplicationStage): Promise<Application> {
+  private async applyTransition(app: Application, to: ApplicationStage, actingOfficer: Officer): Promise<Application> {
     const data: Record<string, unknown> = { stage: to, statusLabel: this.engine.statusLabel(to) }
 
+    // The officer who moves an unassigned application into assignment takes it.
     if (to === ApplicationStage.officerAssigned && !app.officerId) {
-      const officer = await this.assignOfficer(app)
-      if (officer) { data.officerId = officer.id; data.departmentId = officer.departmentId }
+      data.officerId = actingOfficer.id
+      data.departmentId = actingOfficer.departmentId
     }
 
     const updated = await this.prisma.application.update({ where: { id: app.id }, data })
@@ -102,18 +134,6 @@ export class ApplicationsService {
       await this.deliverCertificate(updated)
     }
     return updated
-  }
-
-  private async assignOfficer(app: Application): Promise<Officer | null> {
-    const citizen = await this.prisma.citizen.findUnique({ where: { id: app.citizenId } })
-    // Simple load-aware pick: officer in the citizen's district with the fewest active apps.
-    const officers = await this.prisma.officer.findMany({ where: citizen ? { district: citizen.district } : {} })
-    if (officers.length === 0) return this.prisma.officer.findFirst()
-    const loads = await Promise.all(
-      officers.map(async (o) => ({ o, load: await this.prisma.application.count({ where: { officerId: o.id, stage: { notIn: [ApplicationStage.completed, ApplicationStage.rejected] } } }) })),
-    )
-    loads.sort((a, b) => a.load - b.load)
-    return loads[0].o
   }
 
   private async deliverCertificate(app: Application): Promise<void> {
@@ -135,11 +155,6 @@ export class ApplicationsService {
     await this.prisma.timelineEvent.create({
       data: { citizenId: app.citizenId, applicationId: app.id, year: String(new Date().getFullYear()), title: `${service.producesDocumentType} issued`, subtitle: `${app.referenceNo.replace('APP', 'CRT')} · delivered to Wallet`, kind: 'certificate' },
     })
-  }
-
-  /** Raw entity (with relations) for officer-side operations. */
-  async getRaw(idOrRef: string): Promise<Application> {
-    return (await this.find(idOrRef)).app
   }
 
   async addRemark(applicationId: string, by: string, text: string): Promise<void> {

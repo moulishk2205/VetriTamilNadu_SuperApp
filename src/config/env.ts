@@ -44,6 +44,11 @@ export const env = {
   /** Whether the MSW mock backend should run. Off unless VITE_ENABLE_MSW=true. */
   enableMocks,
 
+  /** Browser speech recognition / synthesis. OFF unless VITE_ENABLE_BROWSER_VOICE=true:
+   *  the Web Speech API streams the citizen's audio to Google, Apple or Microsoft
+   *  servers, so citizen data would leave the platform. */
+  browserVoice: bool(import.meta.env.VITE_ENABLE_BROWSER_VOICE as string | undefined, false),
+
   /** Per-request timeout (ms) before the client aborts and raises a timeout. */
   requestTimeoutMs: Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS ?? 15000),
 

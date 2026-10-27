@@ -1,10 +1,16 @@
 import { useRef, useState } from 'react'
+import { env } from '@/config/env'
 import { useUiStore } from '@/store/uiStore'
 
 /**
  * Voice abstraction over the Web Speech API — Tamil/English recognition in,
  * speech synthesis out. Degrades gracefully where the API is unavailable
  * (`supported: false`); a native app swaps this hook for platform ASR/TTS.
+ *
+ * Disabled unless VITE_ENABLE_BROWSER_VOICE=true: browser engines send the audio
+ * (and, for some voices, the spoken reply) to Google, Apple or Microsoft, which
+ * breaks "citizen data shall not leave the platform". An on-premise ASR/TTS
+ * service would replace this before voice is switched back on.
  */
 
 interface SpeechRecognitionLike {
@@ -19,6 +25,7 @@ interface SpeechRecognitionLike {
 }
 
 function getRecognizer(): (new () => SpeechRecognitionLike) | null {
+  if (!env.browserVoice) return null
   const w = window as unknown as Record<string, unknown>
   return (w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null) as (new () => SpeechRecognitionLike) | null
 }
@@ -58,7 +65,7 @@ export function useVoice() {
   }
 
   const speak = (text: string) => {
-    if (!('speechSynthesis' in window)) return
+    if (!env.browserVoice || !('speechSynthesis' in window)) return
     cancelSpeech() // never overlap utterances
     const u = new SpeechSynthesisUtterance(text)
     u.lang = lang === 'ta' ? 'ta-IN' : 'en-IN'

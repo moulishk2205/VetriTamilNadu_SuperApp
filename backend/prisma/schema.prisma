@@ -25,6 +25,7 @@ enum AuthMethod {
   OTP
   AADHAAR
   BIOMETRIC
+  DEMO // persona sign-in, only while AUTH_MOCK is on
 }
 
 enum ServiceMode {
@@ -144,10 +145,12 @@ model Session {
 
 model Otp {
   id         String   @id @default(uuid())
+  /// HMAC-SHA256 of method + mobile/Aadhaar number. The raw number is never stored.
   identifier String
   codeHash   String
   purpose    String   @default("login")
   consumed   Boolean  @default(false)
+  attempts   Int      @default(0)
   expiresAt  DateTime
   createdAt  DateTime @default(now())
 

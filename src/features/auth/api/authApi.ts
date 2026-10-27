@@ -3,21 +3,21 @@ import { apiClient } from '@/lib/api/client'
 import { TokenPairSchema } from '@/types/models/session'
 import { CitizenSchema } from '@/types/models/citizen'
 
-/** Auth method + identifier the citizen used. Biometric carries no identifier.
- *  `role` selects the RBAC persona (citizen default) — used by portal logins
- *  and Demo Mode; a real backend derives this from the credential instead. */
+/** Auth method + identifier the citizen used. There is no role: the backend
+ *  takes it from the user record. */
 export interface Credentials {
   method: 'otp' | 'aadhaar' | 'biometric'
   identifier?: string
   otp?: string
-  role?: 'citizen' | 'officer' | 'department' | 'mla' | 'admin'
 }
+
+export type DemoPersona = 'citizen' | 'officer' | 'department' | 'mla' | 'admin'
 
 const RequestOtpResponse = z.object({ sent: z.boolean(), channel: z.string() })
 
 const VerifyResponse = z.object({
   tokens: TokenPairSchema,
-  citizen: CitizenSchema,
+  citizen: CitizenSchema.nullable(),
   role: z.enum(['citizen', 'officer', 'department', 'mla', 'admin']).default('citizen'),
   permissions: z.array(z.string()),
   session: z.object({ id: z.string() }),
@@ -35,6 +35,10 @@ export const authApi = {
 
   verify: (cred: Credentials): Promise<VerifyResult> =>
     apiClient.post('/auth/verify', cred, { schema: VerifyResponse, auth: false }),
+
+  /** Demo Mode persona sign-in. The backend serves it only when AUTH_MOCK is on. */
+  demo: (persona: DemoPersona): Promise<VerifyResult> =>
+    apiClient.post('/auth/demo', { persona }, { schema: VerifyResponse, auth: false }),
 
   refresh: (refreshToken: string) =>
     apiClient.post('/auth/refresh', { refreshToken }, { schema: TokenPairSchema, auth: false }),

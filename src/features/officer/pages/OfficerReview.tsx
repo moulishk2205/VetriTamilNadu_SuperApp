@@ -44,7 +44,7 @@ export default function OfficerReview() {
   }
 
   const actions: { a: OfficerAction; l: string; icon: typeof CheckCircle; tone: string; desc: string }[] = [
-    { a: 'approve', l: 'Approve & Issue', icon: CheckCircle, tone: c.ok, desc: 'eSign (placeholder) → generate certificate → deliver to Wallet' },
+    { a: 'approve', l: 'Approve this step', icon: CheckCircle, tone: c.ok, desc: 'Move to the next stage. The certificate is issued only after approval → eSign → generation.' },
     { a: 'correction', l: 'Request Correction', icon: FileText, tone: c.info, desc: 'Return to citizen for additional documents' },
     { a: 'escalate', l: 'Escalate', icon: AlertTriangle, tone: c.warn, desc: `Escalate to ${meta?.authorities.escalation ?? 'senior officer'}` },
     { a: 'transfer', l: 'Transfer', icon: Users, tone: c.info, desc: 'Reassign to another officer' },

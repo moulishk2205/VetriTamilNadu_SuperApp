@@ -28,15 +28,3 @@ export function useCreateApplication() {
     },
   })
 }
-
-export function useAdvanceApplication() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: applicationsApi.advance,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: applicationKeys.all })
-      qc.invalidateQueries({ queryKey: ['documents'] })
-      qc.invalidateQueries({ queryKey: ['notifications'] })
-    },
-  })
-}

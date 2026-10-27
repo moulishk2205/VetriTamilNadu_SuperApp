@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
-import { CurrentCitizenId } from '../../common/decorators/current-user.decorator'
+import { CurrentCitizenId, CurrentUser, type JwtUser } from '../../common/decorators/current-user.decorator'
+import { Roles } from '../../common/decorators/roles.decorator'
 import { ApplicationsService } from './applications.service'
 import { CreateApplicationDto } from './dto/create-application.dto'
 
@@ -24,9 +25,11 @@ export class ApplicationsController {
     return this.apps.create(citizenId, dto)
   }
 
-  /** Demo hook the tracker calls to walk an application one legal step forward. */
+  /** Officer moves an application one legal step forward, within their own
+   *  jurisdiction. Citizens cannot advance applications, including their own. */
+  @Roles('OFFICER')
   @Post(':id/advance')
-  advance(@CurrentCitizenId() citizenId: string, @Param('id') id: string) {
-    return this.apps.advance(id, citizenId)
+  async advance(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.apps.advance(id, await this.apps.officerFor(user))
   }
 }

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Citizen } from '@/types/models/citizen'
-import { authApi, type Credentials } from '@/features/auth/api/authApi'
+import { authApi, type Credentials, type DemoPersona, type VerifyResult } from '@/features/auth/api/authApi'
 import { tokenStore } from '@/lib/api/tokenStore'
 import { queryClient } from '@/config/queryClient'
 import { createLogger } from '@/lib/logger/logger'
@@ -21,6 +21,8 @@ export interface AuthState {
   permissions: string[]
   refreshToken: string | null
   login: (cred: Credentials) => Promise<void>
+  /** Demo Mode only: sign in as a seeded persona (backend AUTH_MOCK must be on). */
+  loginAsPersona: (persona: DemoPersona) => Promise<void>
   logout: () => Promise<void>
   /** Re-arm the refresh handler after a reload (persisted session). */
   bootstrap: () => void
@@ -44,6 +46,18 @@ export const useAuthStore = create<AuthState>()(
         }
       }
 
+      const startSession = (res: VerifyResult) => {
+        tokenStore.setAccessToken(res.tokens.accessToken)
+        tokenStore.setRefreshHandler(refreshHandler)
+        set({
+          isAuthenticated: true,
+          citizen: res.citizen,
+          role: res.role,
+          permissions: res.permissions,
+          refreshToken: res.tokens.refreshToken,
+        })
+      }
+
       return {
         isAuthenticated: false,
         citizen: null,
@@ -52,17 +66,13 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: null,
 
         login: async (cred) => {
-          const res = await authApi.verify(cred)
-          tokenStore.setAccessToken(res.tokens.accessToken)
-          tokenStore.setRefreshHandler(refreshHandler)
-          set({
-            isAuthenticated: true,
-            citizen: res.citizen,
-            role: res.role,
-            permissions: res.permissions,
-            refreshToken: res.tokens.refreshToken,
-          })
-          log.info('login ok', { method: cred.method, role: res.role })
+          startSession(await authApi.verify(cred))
+          log.info('login ok', { method: cred.method, role: get().role })
+        },
+
+        loginAsPersona: async (persona) => {
+          startSession(await authApi.demo(persona))
+          log.info('demo login ok', { role: get().role })
         },
 
         logout: async () => {

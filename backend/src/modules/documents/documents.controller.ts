@@ -14,7 +14,7 @@ export class DocumentsController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.docs.get(id)
+  get(@CurrentCitizenId() citizenId: string, @Param('id') id: string) {
+    return this.docs.get(id, citizenId)
   }
 }

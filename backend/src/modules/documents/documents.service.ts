@@ -21,8 +21,9 @@ export class DocumentsService {
     return pageOf(docs.map(toWalletDoc))
   }
 
-  async get(id: string) {
-    const doc = await this.prisma.document.findFirst({ where: { id, deletedAt: null } })
+  /** Owner-scoped: another citizen's document is simply not found. */
+  async get(id: string, citizenId: string) {
+    const doc = await this.prisma.document.findFirst({ where: { id, citizenId, deletedAt: null } })
     if (!doc) throw new NotFoundException('Document not found')
     return toWalletDoc(doc)
   }

@@ -42,14 +42,18 @@ export class NotificationsService {
     return pageOf((await this.feed(citizenId)).map(toNotificationDto))
   }
 
-  async markRead(id: string) {
-    const n = await this.prisma.notification.findUnique({ where: { id } })
+  /** Owner-scoped: only the citizen's own notifications can be marked read.
+   *  Broadcasts (citizenId null) are shared rows, so one citizen can't mark them
+   *  read for everyone; they stay unread until per-reader receipts exist. */
+  async markRead(id: string, citizenId: string) {
+    const n = await this.prisma.notification.findFirst({ where: { id, OR: [{ citizenId }, { citizenId: null }] } })
     if (!n) throw new NotFoundException('Notification not found')
+    if (n.citizenId === null) return toNotificationDto(n)
     return toNotificationDto(await this.prisma.notification.update({ where: { id }, data: { read: true } }))
   }
 
   async markAllRead(citizenId: string) {
-    await this.prisma.notification.updateMany({ where: { OR: [{ citizenId }, { citizenId: null }], read: false }, data: { read: true } })
+    await this.prisma.notification.updateMany({ where: { citizenId, read: false }, data: { read: true } })
     return this.list(citizenId)
   }
 

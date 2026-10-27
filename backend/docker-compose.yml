@@ -1,3 +1,15 @@
+# Secrets come from the environment (or an untracked .env next to this file)
+# and have no defaults: `docker compose up` refuses to start without them.
+#   POSTGRES_PASSWORD   database password (URL-safe characters only)
+#   REDIS_PASSWORD      redis password
+#   JWT_ACCESS_SECRET   at least 32 random characters, e.g. `openssl rand -hex 32`
+# Demo switches, both OFF unless set explicitly:
+#   AUTH_MOCK=true      fixed OTP 123456 + Demo Mode personas
+#   SEED_ON_BOOT=true   seed demo data when the database is empty
+#
+# Only the API (4000) is published. Postgres and Redis are reachable only on the
+# compose network. For local development from the host, add the loopback-only
+# override: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 services:
   postgres:
     image: postgres:16-alpine
@@ -5,10 +17,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: vetri
-      POSTGRES_PASSWORD: vetri
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
       POSTGRES_DB: vetri
-    ports:
-      - '5432:5432'
     volumes:
       - vetri-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,8 +31,9 @@ services:
     image: redis:7-alpine
     container_name: vetri-redis
     restart: unless-stopped
-    ports:
-      - '6379:6379'
+    command: ['redis-server', '--requirepass', '${REDIS_PASSWORD:?set REDIS_PASSWORD}']
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -42,15 +53,16 @@ services:
       NODE_ENV: production
       PORT: '4000'
       API_PREFIX: api
-      DATABASE_URL: postgresql://vetri:vetri@postgres:5432/vetri?schema=public
+      DATABASE_URL: postgresql://vetri:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/vetri?schema=public
       REDIS_HOST: redis
       REDIS_PORT: '6379'
-      JWT_ACCESS_SECRET: change-me-access
-      JWT_REFRESH_SECRET: change-me-refresh
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
       JWT_ACCESS_TTL: '900'
       JWT_REFRESH_TTL: '1209600'
-      CORS_ORIGIN: http://localhost:5173
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       GATEWAY_MODE: mock
+      AUTH_MOCK: ${AUTH_MOCK:-false}
+      SEED_ON_BOOT: ${SEED_ON_BOOT:-false}
     ports:
       - '4000:4000'
     healthcheck:
@@ -59,19 +71,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: vetri-pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@vetri.tn
-      PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-    ports:
-      - '5050:80'
-    depends_on:
-      - postgres
 
 volumes:
   vetri-pgdata:

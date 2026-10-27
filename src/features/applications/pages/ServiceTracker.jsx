@@ -2,7 +2,7 @@ import { User, CheckCircle, RefreshCw, Timer } from "lucide-react";
 import { StatusBar, BottomNav, Card, Sec, Header, Btn, Empty } from "@/components/ui";
 import { useT, useC } from "@/hooks/useUi";
 import { useTrackerView } from "@/features/applications/hooks/useTrackerView";
-import { useAdvanceApplication } from "@/features/applications/hooks/useApplications";
+import { useApplicationsQuery } from "@/features/applications/hooks/useApplications";
 import { LoadingState } from "@/components/feedback/states";
 import { StepRail } from "@/components/feedback/StepRail";
 
@@ -10,7 +10,8 @@ const ServiceTracker = ({ onNav, goBack }) => {
   const c = useC();
   const t = useT();
   const view = useTrackerView();
-  const advance = useAdvanceApplication();
+  // "Check for updates" only re-reads the status; officers move applications.
+  const applications = useApplicationsQuery();
   const tone = view.statusTone === "ok" ? c.ok : view.statusTone === "err" ? c.err : c.warn;
 
   return (
@@ -85,8 +86,8 @@ const ServiceTracker = ({ onNav, goBack }) => {
               ))}
             </div>
 
-            <Btn full variant="outline" style={{ marginTop: 24 }} icon={RefreshCw} onClick={() => advance.mutate(view.id)} disabled={advance.isPending}>
-              {advance.isPending ? "Checking…" : "Check for updates"}
+            <Btn full variant="outline" style={{ marginTop: 24 }} icon={RefreshCw} onClick={() => applications.refetch()} disabled={applications.isFetching}>
+              {applications.isFetching ? "Checking…" : "Check for updates"}
             </Btn>
           </>
         )}

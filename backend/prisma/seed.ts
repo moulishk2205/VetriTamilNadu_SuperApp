@@ -85,6 +85,13 @@ const STAGES = Object.values(ApplicationStage)
 async function main() {
   console.log('🌱 Seeding Vetri TN backend…')
 
+  // The seed wipes every table, AuditLog included. Refuse to touch a database
+  // that already holds data unless SEED_FORCE=true is set explicitly.
+  const existing = await prisma.citizen.count()
+  if (existing > 0 && process.env.SEED_FORCE !== 'true') {
+    throw new Error(`Refusing to seed: database already holds ${existing} citizens. Set SEED_FORCE=true to wipe and reseed.`)
+  }
+
   // Wipe (FK-safe order)
   await prisma.$transaction([
     prisma.aiMessage.deleteMany(), prisma.conversation.deleteMany(), prisma.payment.deleteMany(),

@@ -9,10 +9,9 @@ import { ROLE_HOME, type Role } from '@/lib/rbac/roles'
 /**
  * Demo / Presentation Mode — the cockpit for stakeholder demonstrations.
  *
- * One tap logs in as each persona through the *real* auth pipeline (mock OTP
- * verify with a role claim → RBAC permissions → role-guarded portal), so the
- * demo exercises exactly what production would. All data is served by the
- * embedded mock backend, so the entire demonstration works offline.
+ * One tap signs in as a seeded persona through `POST /auth/demo`, which the
+ * backend serves only when AUTH_MOCK is on. Each persona is its own user record,
+ * so its role comes from that record, never from the client.
  */
 
 const PERSONAS: { role: Role; label: string; desc: string; icon: typeof User; home: string }[] = [
@@ -39,13 +38,13 @@ const SCRIPT = [
 export default function DemoMode() {
   const c = useC()
   const navigate = useNavigate()
-  const login = useAuthStore((s) => s.login)
+  const loginAsPersona = useAuthStore((s) => s.loginAsPersona)
   const [busy, setBusy] = useState<Role | null>(null)
 
   const enter = async (role: Role, home: string) => {
     setBusy(role)
     try {
-      await login({ method: 'biometric', role })
+      await loginAsPersona(role)
       navigate(home)
     } finally {
       setBusy(null)

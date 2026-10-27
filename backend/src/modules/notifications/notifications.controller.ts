@@ -21,8 +21,8 @@ export class NotificationsController {
   }
 
   @Patch('notifications/:id/read')
-  markRead(@Param('id') id: string) {
-    return this.notifications.markRead(id)
+  markRead(@CurrentCitizenId() citizenId: string, @Param('id') id: string) {
+    return this.notifications.markRead(id, citizenId)
   }
 
   @Post('notifications/read-all')

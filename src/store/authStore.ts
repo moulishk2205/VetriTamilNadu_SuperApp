@@ -3,6 +3,12 @@ import { persist } from 'zustand/middleware'
 import type { Citizen } from '@/types/models/citizen'
 import { authApi, type Credentials, type DemoPersona, type VerifyResult } from '@/features/auth/api/authApi'
 import { tokenStore } from '@/lib/api/tokenStore'
+import { citizenSessionStorage, purgeLegacyCitizenData } from '@/lib/storage/citizenData'
+import { useAiStore } from '@/store/aiStore'
+import { useDraftStore } from '@/store/draftStore'
+import { useOfflineQueue } from '@/store/offlineQueueStore'
+import { useSearchHistoryStore } from '@/store/searchHistoryStore'
+import { useCitizenMemory } from '@/features/ai/memory/citizenMemory'
 import { queryClient } from '@/config/queryClient'
 import { createLogger } from '@/lib/logger/logger'
 
@@ -11,9 +17,20 @@ const log = createLogger('auth')
 /**
  * Session/auth state — real OTP-verified session, access/refresh tokens, the
  * signed-in citizen, and an RBAC-ready permission list (for future
- * officer/admin areas). The access token lives in-memory (`tokenStore`); only
- * the refresh token + non-sensitive session facts are persisted.
+ * officer/admin areas). The access token lives in-memory (`tokenStore`). Only
+ * the refresh token + role/permissions are persisted, in sessionStorage; the
+ * citizen's profile is never stored in the browser and is re-read from
+ * `/auth/me` after a reload.
  */
+
+/** Wipe everything a previous citizen left in this browser (shared kiosks). */
+function clearCitizenData(): void {
+  useAiStore.getState().clear()
+  useDraftStore.setState({ drafts: {} })
+  useCitizenMemory.setState({ frequentServices: {}, lastIntents: [] })
+  useOfflineQueue.setState({ queue: [] })
+  useSearchHistoryStore.getState().clear()
+}
 export interface AuthState {
   isAuthenticated: boolean
   citizen: Citizen | null
@@ -24,7 +41,7 @@ export interface AuthState {
   /** Demo Mode only: sign in as a seeded persona (backend AUTH_MOCK must be on). */
   loginAsPersona: (persona: DemoPersona) => Promise<void>
   logout: () => Promise<void>
-  /** Re-arm the refresh handler after a reload (persisted session). */
+  /** After a reload: purge legacy PII, re-arm token refresh, re-read the profile. */
   bootstrap: () => void
   hasPermission: (permission: string) => boolean
 }
@@ -84,16 +101,24 @@ export const useAuthStore = create<AuthState>()(
           await authApi.logout()
           tokenStore.clear()
           set({ isAuthenticated: false, citizen: null, role: 'citizen', permissions: [], refreshToken: null })
+          clearCitizenData()
           queryClient.clear()
           log.info('logout')
         },
 
         bootstrap: () => {
+          purgeLegacyCitizenData()
           if (!get().refreshToken) return
           tokenStore.setRefreshHandler(refreshHandler)
-          // Renew the access token now, while the intro plays, so the first
-          // screen's requests are authorised instead of each failing once.
-          void tokenStore.refresh()
+          // Renew the access token now (single-flight) and restore the profile,
+          // which is never kept in the browser. A dead session logs out via
+          // refreshHandler.
+          authApi
+            .me()
+            .then((p) => {
+              if (get().isAuthenticated) set({ citizen: p.citizen, role: p.role, permissions: p.permissions })
+            })
+            .catch((e) => log.warn('profile restore failed', { error: String(e) }))
         },
 
         hasPermission: (permission) => get().permissions.includes(permission),
@@ -101,10 +126,11 @@ export const useAuthStore = create<AuthState>()(
     },
     {
       name: 'vetri.auth',
-      version: 2,
+      version: 3,
+      storage: citizenSessionStorage,
+      // No citizen profile: it is PII and the next citizen at a kiosk could read it.
       partialize: (s) => ({
         isAuthenticated: s.isAuthenticated,
-        citizen: s.citizen,
         role: s.role,
         permissions: s.permissions,
         refreshToken: s.refreshToken,

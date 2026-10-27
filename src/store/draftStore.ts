@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { citizenSessionStorage } from '@/lib/storage/citizenData'
 import type { FormValues } from '@/lib/forms/types'
 
 /**
  * Draft store — persisted, per-form draft saving for the Form Engine.
- * Complaint drafts, half-filled service applications, etc. survive reloads.
+ * Complaint drafts, half-filled service applications, etc. survive reloads
+ * within the browser session and are wiped on logout.
  */
 export interface DraftState {
   drafts: Record<string, FormValues>
@@ -26,6 +28,6 @@ export const useDraftStore = create<DraftState>()(
           return { drafts: next }
         }),
     }),
-    { name: 'vetri.drafts', version: 1 },
+    { name: 'vetri.drafts', version: 1, storage: citizenSessionStorage },
   ),
 )

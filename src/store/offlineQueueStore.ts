@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { citizenSessionStorage } from '@/lib/storage/citizenData'
 
 /**
  * Offline mutation queue — actions captured while offline are persisted and
@@ -40,6 +41,6 @@ export const useOfflineQueue = create<OfflineQueueState>()(
         return done
       },
     }),
-    { name: 'vetri.offline-queue', version: 1 },
+    { name: 'vetri.offline-queue', version: 1, storage: citizenSessionStorage },
   ),
 )

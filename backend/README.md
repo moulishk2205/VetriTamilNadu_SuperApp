@@ -33,7 +33,7 @@ unprivileged `node` user.
 | Service   | URL                              |
 |-----------|----------------------------------|
 | API       | http://localhost:4000/api        |
-| Swagger   | http://localhost:4000/api/docs   |
+| Swagger   | http://localhost:4000/api/docs (off in production unless `SWAGGER=true`) |
 | Health    | http://localhost:4000/health (503 when the database is down) |
 
 Postgres and Redis are not published on the host. For local development add the

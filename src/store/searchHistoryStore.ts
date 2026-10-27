@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { citizenSessionStorage } from '@/lib/storage/citizenData'
 
-/** Recent-searches store (persisted), backing the Universal Search recents. */
+/** Recent-searches store (session-persisted), backing the Universal Search recents. */
 export interface SearchHistoryState {
   recent: string[]
   record: (term: string) => void
@@ -22,6 +23,6 @@ export const useSearchHistoryStore = create<SearchHistoryState>()(
         }),
       clear: () => set({ recent: [] }),
     }),
-    { name: 'vetri.search', version: 1 },
+    { name: 'vetri.search', version: 1, storage: citizenSessionStorage },
   ),
 )

@@ -15,11 +15,15 @@ export type DemoPersona = 'citizen' | 'officer' | 'department' | 'mla' | 'admin'
 
 const RequestOtpResponse = z.object({ sent: z.boolean(), channel: z.string() })
 
-const VerifyResponse = z.object({
-  tokens: TokenPairSchema,
+const ProfileResponse = z.object({
   citizen: CitizenSchema.nullable(),
   role: z.enum(['citizen', 'officer', 'department', 'mla', 'admin']).default('citizen'),
   permissions: z.array(z.string()),
+})
+export type Profile = z.infer<typeof ProfileResponse>
+
+const VerifyResponse = ProfileResponse.extend({
+  tokens: TokenPairSchema,
   session: z.object({ id: z.string() }),
 })
 export type VerifyResult = z.infer<typeof VerifyResponse>
@@ -39,6 +43,9 @@ export const authApi = {
   /** Demo Mode persona sign-in. The backend serves it only when AUTH_MOCK is on. */
   demo: (persona: DemoPersona): Promise<VerifyResult> =>
     apiClient.post('/auth/demo', { persona }, { schema: VerifyResponse, auth: false }),
+
+  /** The signed-in user's profile, role and permissions, read from the backend. */
+  me: (): Promise<Profile> => apiClient.get('/auth/me', { schema: ProfileResponse }),
 
   refresh: (refreshToken: string) =>
     apiClient.post('/auth/refresh', { refreshToken }, { schema: TokenPairSchema, auth: false }),

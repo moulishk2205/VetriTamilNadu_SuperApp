@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { citizenSessionStorage } from '@/lib/storage/citizenData'
 
 /**
- * AI conversation memory — persists across sessions and services, so the
- * assistant remembers the thread ("cross-service memory") after reloads.
+ * AI conversation memory — kept across services and reloads for this browser
+ * session only (sessionStorage), and wiped on logout.
  */
 export interface AiMessage {
   role: 'user' | 'ai'
@@ -25,6 +26,6 @@ export const useAiStore = create<AiState>()(
       setMessages: (messages) => set({ messages }),
       clear: () => set({ messages: [] }),
     }),
-    { name: 'vetri.ai', version: 1 },
+    { name: 'vetri.ai', version: 1, storage: citizenSessionStorage },
   ),
 )

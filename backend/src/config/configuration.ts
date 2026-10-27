@@ -15,6 +15,8 @@ export interface AppConfig {
      *  unless AUTH_MOCK=true is set explicitly. */
     mock: boolean
   }
+  /** Swagger UI at /<prefix>/docs. Off in production unless SWAGGER=true. */
+  swagger: boolean
   redis: { host: string; port: number }
   throttle: { ttl: number; limit: number }
   storage: { driver: string; dir: string }
@@ -51,6 +53,7 @@ export default (): AppConfig => {
     auth: {
       mock: flag('AUTH_MOCK') ?? nodeEnv !== 'production',
     },
+    swagger: flag('SWAGGER') ?? nodeEnv !== 'production',
     redis: {
       host: process.env.REDIS_HOST ?? 'localhost',
       port: Number(process.env.REDIS_PORT ?? 6379),

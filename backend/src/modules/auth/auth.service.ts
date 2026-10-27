@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import { JwtService } from '@nestjs/jwt'
 import { AuthMethod, Citizen, Role, User } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
-import { createHmac, randomInt, randomUUID } from 'crypto'
+import { createHash, createHmac, randomInt, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma/prisma.service'
 import type { JwtUser } from '../../common/decorators/current-user.decorator'
 import { ROLE_PERMISSIONS } from './rbac'
@@ -25,13 +25,19 @@ const PERSONA_ROLE: Record<DemoPersona, Role> = {
 type OtpMethod = 'otp' | 'aadhaar'
 type TokenPair = { accessToken: string; refreshToken: string; expiresIn: number }
 
-export interface LoginResult {
-  tokens: TokenPair
+export interface Profile {
   citizen: Citizen | null
   role: string
   permissions: string[]
+}
+
+export interface LoginResult extends Profile {
+  tokens: TokenPair
   session: { id: string }
 }
+
+/** Refresh tokens are random UUIDs; only their SHA-256 is stored. */
+const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex')
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -110,8 +116,11 @@ export class AuthService implements OnModuleInit {
   }
 
   async refresh(refreshToken: string): Promise<TokenPair> {
-    const existing = await this.prisma.refreshToken.findUnique({ where: { token: refreshToken } })
-    if (!existing || existing.revoked || existing.expiresAt < new Date()) {
+    const existing = await this.prisma.refreshToken.findUnique({
+      where: { token: hashToken(refreshToken) },
+      include: { session: true },
+    })
+    if (!existing || existing.revoked || existing.expiresAt < new Date() || !existing.session || existing.session.endedAt) {
       throw new UnauthorizedException('Refresh token invalid or expired')
     }
     // Rotation. Conditional so a token replayed concurrently is honoured once.
@@ -119,15 +128,32 @@ export class AuthService implements OnModuleInit {
     if (count === 0) throw new UnauthorizedException('Refresh token invalid or expired')
     const user = await this.prisma.user.findUnique({ where: { id: existing.userId } })
     if (!user || !user.active || user.deletedAt) throw new UnauthorizedException('User not found')
-    return this.issueTokens(this.claimsFor(user))
+    return this.issueTokens(this.claimsFor(user, existing.session.id))
   }
 
+  /** Ends the caller's session: its access tokens stop working at once and its
+   *  refresh tokens are revoked. Other devices stay signed in. */
   async logout(user: JwtUser | undefined): Promise<void> {
-    if (user) await this.prisma.refreshToken.updateMany({ where: { userId: user.sub, revoked: false }, data: { revoked: true } })
+    if (!user?.sid) return
+    await this.prisma.session.updateMany({ where: { id: user.sid, userId: user.sub, endedAt: null }, data: { endedAt: new Date() } })
+    await this.prisma.refreshToken.updateMany({ where: { sessionId: user.sid, revoked: false }, data: { revoked: true } })
+  }
+
+  /** Profile for a signed-in caller, so the browser never has to keep one. */
+  async me(caller: JwtUser): Promise<Profile> {
+    const user = await this.prisma.user.findUnique({ where: { id: caller.sub } })
+    if (!user || !user.active || user.deletedAt) throw new UnauthorizedException('User not found')
+    return this.profileFor(user)
   }
 
   private async startSession(user: User, method: AuthMethod): Promise<LoginResult> {
     if (!user.active || user.deletedAt) throw new UnauthorizedException('This account is disabled')
+    const session = await this.prisma.session.create({ data: { userId: user.id, method } })
+    const tokens = await this.issueTokens(this.claimsFor(user, session.id))
+    return { tokens, ...(await this.profileFor(user)), session: { id: session.id } }
+  }
+
+  private async profileFor(user: User): Promise<Profile> {
     const own = user.citizenId
       ? await this.prisma.citizen.findUnique({ where: { id: user.citizenId }, include: { addresses: true } })
       : null
@@ -136,16 +162,13 @@ export class AuthService implements OnModuleInit {
     const citizen = own ?? (this.mock
       ? await this.prisma.citizen.findUnique({ where: { citizenId: DEMO_CITIZEN_ID }, include: { addresses: true } })
       : null)
-
-    const session = await this.prisma.session.create({ data: { userId: user.id, method } })
-    const claims = this.claimsFor(user)
-    const tokens = await this.issueTokens(claims)
-    return { tokens, citizen, role: user.role.toLowerCase(), permissions: claims.permissions, session: { id: session.id } }
+    return { citizen, role: user.role.toLowerCase(), permissions: ROLE_PERMISSIONS[user.role] }
   }
 
-  private claimsFor(user: User): JwtUser {
+  private claimsFor(user: User, sid: string): JwtUser {
     return {
       sub: user.id,
+      sid,
       role: user.role,
       citizenId: user.citizenId ?? undefined,
       officerId: user.officerId ?? undefined,
@@ -227,7 +250,7 @@ export class AuthService implements OnModuleInit {
     })
     const refreshToken = randomUUID()
     await this.prisma.refreshToken.create({
-      data: { token: refreshToken, userId: claims.sub, expiresAt: new Date(Date.now() + refreshTtl * 1000) },
+      data: { token: hashToken(refreshToken), userId: claims.sub, sessionId: claims.sid, expiresAt: new Date(Date.now() + refreshTtl * 1000) },
     })
     return { accessToken, refreshToken, expiresIn: accessTtl }
   }

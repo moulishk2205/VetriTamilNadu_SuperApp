@@ -122,12 +122,17 @@ model Permission {
 
 model RefreshToken {
   id        String   @id @default(uuid())
+  /// SHA-256 of the token. The token itself is never stored.
   token     String   @unique
   user      User     @relation(fields: [userId], references: [id])
   userId    String
+  session   Session? @relation(fields: [sessionId], references: [id])
+  sessionId String?
   revoked   Boolean  @default(false)
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  @@index([sessionId])
 }
 
 model Session {
@@ -139,6 +144,9 @@ model Session {
   ip         String?
   location   String?
   lastSeenAt DateTime  @default(now())
+  /// Set on logout. Access tokens carry the session id and stop working at once.
+  endedAt    DateTime?
+  refreshTokens RefreshToken[]
   createdAt  DateTime  @default(now())
   deletedAt  DateTime?
 }

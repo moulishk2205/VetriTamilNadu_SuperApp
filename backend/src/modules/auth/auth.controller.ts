@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common'
+import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { Throttle } from '@nestjs/throttler'
 import { Public } from '../../common/decorators/public.decorator'
@@ -39,6 +39,12 @@ export class AuthController {
   @Post('refresh')
   refresh(@Body() dto: RefreshDto) {
     return this.auth.refresh(dto.refreshToken)
+  }
+
+  /** The caller's profile, role and permissions, read from the user record. */
+  @Get('me')
+  me(@CurrentUser() user: JwtUser) {
+    return this.auth.me(user)
   }
 
   @Post('logout')

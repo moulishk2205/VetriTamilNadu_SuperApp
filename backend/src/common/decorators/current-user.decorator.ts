@@ -2,6 +2,8 @@ import { createParamDecorator, ExecutionContext, ForbiddenException } from '@nes
 
 export interface JwtUser {
   sub: string
+  /** Session the token belongs to; ending the session revokes the token. */
+  sid?: string
   role: string
   citizenId?: string
   officerId?: string

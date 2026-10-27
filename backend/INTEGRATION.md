@@ -34,6 +34,7 @@ overrides/aliases.)
 | `POST /api/auth/verify` | auth.ts | `auth` | public |
 | `POST /api/auth/demo` | auth.ts | `auth` | public, 404 unless `AUTH_MOCK=true` |
 | `POST /api/auth/refresh` | auth.ts | `auth` | public |
+| `GET  /api/auth/me` | auth.ts | `auth` | bearer |
 | `POST /api/auth/logout` | auth.ts | `auth` | bearer |
 | `GET  /api/services` | catalog.ts | `catalog` | public |
 | `GET  /api/service-categories` | catalog.ts | `catalog` | public |

@@ -1,6 +1,2 @@
-import { Module } from '@nestjs/common'
-import { ComplaintsController } from './complaints.controller'
-import { ComplaintsService } from './complaints.service'
-
-@Module({ controllers: [ComplaintsController], providers: [ComplaintsService] })
-export class ComplaintsModule {}
+// The module lives beside its controllers so the officer grievance controller can share them.
+export { ComplaintsModule } from './complaints.controller'

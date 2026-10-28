@@ -6,7 +6,16 @@ import { AuditService } from '../../common/audit/audit.service'
 import { ApplicationsService } from '../applications/applications.service'
 import { WorkflowEngine } from '../workflow/workflow.engine'
 
-interface ActionInput { action: string; note?: string }
+interface ActionInput { action: string; note?: string; toOfficerId?: string }
+
+/** Where "Return" sends a case: the previous stage on the main path. */
+const PREVIOUS: Partial<Record<ApplicationStage, ApplicationStage>> = {
+  departmentQueue: ApplicationStage.officerAssigned,
+  inspection: ApplicationStage.departmentQueue,
+  remarks: ApplicationStage.inspection,
+  escalation: ApplicationStage.inspection,
+  approval: ApplicationStage.remarks,
+}
 
 const NON_TERMINAL = { notIn: [ApplicationStage.completed, ApplicationStage.rejected] }
 
@@ -135,10 +144,87 @@ export class OfficerService {
         }
         break
       }
+      case 'return': {
+        // Send the case back one stage on the main path, e.g. approval → remarks,
+        // for another look. Leaving approval clears the recommendation (maker).
+        const prev = PREVIOUS[app.stage]
+        if (!prev) throw new ConflictException('This case cannot be returned from its current stage')
+        await this.prisma.application.update({ where: { id: app.id }, data: { stage: prev, statusLabel: this.engine.statusLabel(prev), ...(app.stage === ApplicationStage.approval ? { makerOfficerId: null } : {}) } })
+        await this.writeAudit(actor, 'return', app.referenceNo, `${app.stage} → ${prev}${input.note ? `: ${input.note}` : ''}`)
+        await this.notify(app.citizenId, 'Application Returned for Review', `${svcName} ${app.referenceNo} was sent back to ${this.engine.stage(prev)?.label ?? prev} for another review.`, '/tracker', 'AlertTriangle', 'info', 'application')
+        break
+      }
+      case 'forward': {
+        // Hand the case to a named colleague in the same district.
+        const to = input.toOfficerId ? await this.prisma.officer.findFirst({ where: { id: input.toOfficerId, district: officer.district, deletedAt: null } }) : null
+        if (!to || to.id === officer.id) throw new BadRequestException('Choose a colleague in your district to forward to')
+        await this.prisma.application.update({ where: { id: app.id }, data: { officerId: to.id, departmentId: to.departmentId } })
+        await this.writeAudit(actor, 'forward', app.referenceNo, `→ ${to.name}${input.note ? `: ${input.note}` : ''}`)
+        await this.notify(app.citizenId, 'Application Forwarded', `${svcName} ${app.referenceNo} was forwarded to ${to.name}, ${to.designation}.`, '/tracker', 'Users', 'info', 'application')
+        break
+      }
       default:
         throw new BadRequestException(`Unknown action ${input.action}`)
     }
     return this.apps.get(app.id)
+  }
+
+  /** Colleagues in the officer's district, for forwarding and report requests. */
+  async colleagues(user: JwtUser) {
+    const me = await this.apps.officerFor(user)
+    const rows = await this.prisma.officer.findMany({ where: { district: me.district, deletedAt: null, id: { not: me.id } }, orderBy: [{ departmentId: 'asc' }, { name: 'asc' }], take: 50 })
+    return { items: rows.map((o) => ({ id: o.id, name: o.name, designation: o.designation, sameDepartment: o.departmentId === me.departmentId })) }
+  }
+
+  /** Seek report: ask a colleague a question about a case in your queue. */
+  async requestReport(idOrRef: string, input: { toOfficerId: string; question: string }, user: JwtUser) {
+    const me = await this.apps.officerFor(user)
+    const app = await this.apps.getRawForOfficer(idOrRef, me)
+    const to = await this.prisma.officer.findFirst({ where: { id: input.toOfficerId, district: me.district, deletedAt: null } })
+    if (!to || to.id === me.id) throw new BadRequestException('Choose a colleague in your district')
+    const question = input.question.trim()
+    if (!question) throw new BadRequestException('Write the question for your colleague')
+    await this.prisma.reportRequest.create({ data: { applicationId: app.id, requestedById: me.id, assignedToId: to.id, question } })
+    await this.writeAudit(`${me.name} (${me.designation})`, 'seek-report', app.referenceNo, `→ ${to.name}: ${question}`)
+    return this.reportsFor(app.id)
+  }
+
+  /** Report requests on one case (shown on the review screen). */
+  async reportsForCase(idOrRef: string, user: JwtUser) {
+    const app = await this.apps.getRawForOfficer(idOrRef, await this.apps.officerFor(user))
+    return this.reportsFor(app.id)
+  }
+
+  /** Report requests addressed to the signed-in officer, unanswered first. */
+  async myReportRequests(user: JwtUser) {
+    const me = await this.apps.officerFor(user)
+    const rows = await this.prisma.reportRequest.findMany({ where: { assignedToId: me.id }, include: { application: { select: { referenceNo: true, serviceName: true } } }, orderBy: { createdAt: 'desc' }, take: 50 })
+    const names = await this.officerNames(rows.map((r) => r.requestedById))
+    rows.sort((a, b) => Number(a.answeredAt !== null) - Number(b.answeredAt !== null))
+    return { items: rows.map((r) => ({ id: r.id, referenceNo: r.application.referenceNo, serviceName: r.application.serviceName, from: names.get(r.requestedById) ?? 'Officer', question: r.question, answer: r.answer, createdAt: r.createdAt.toISOString(), answeredAt: r.answeredAt?.toISOString() ?? null })), open: rows.filter((r) => !r.answeredAt).length }
+  }
+
+  async answerReport(id: string, answer: string, user: JwtUser) {
+    const me = await this.apps.officerFor(user)
+    const text = answer.trim()
+    if (!text) throw new BadRequestException('Write your report')
+    const r = await this.prisma.reportRequest.findFirst({ where: { id, assignedToId: me.id }, include: { application: { select: { referenceNo: true } } } })
+    if (!r) throw new NotFoundException('Report request not found')
+    if (r.answeredAt) throw new ConflictException('This report was already submitted')
+    await this.prisma.reportRequest.update({ where: { id }, data: { answer: text, answeredAt: new Date() } })
+    await this.writeAudit(`${me.name} (${me.designation})`, 'submit-report', r.application.referenceNo, text)
+    return this.myReportRequests(user)
+  }
+
+  private async reportsFor(applicationId: string) {
+    const rows = await this.prisma.reportRequest.findMany({ where: { applicationId }, orderBy: { createdAt: 'asc' } })
+    const names = await this.officerNames(rows.flatMap((r) => [r.requestedById, r.assignedToId]))
+    return { items: rows.map((r) => ({ id: r.id, from: names.get(r.requestedById) ?? 'Officer', to: names.get(r.assignedToId) ?? 'Officer', question: r.question, answer: r.answer, createdAt: r.createdAt.toISOString(), answeredAt: r.answeredAt?.toISOString() ?? null })) }
+  }
+
+  private async officerNames(ids: string[]) {
+    const rows = await this.prisma.officer.findMany({ where: { id: { in: [...new Set(ids)] } }, select: { id: true, name: true } })
+    return new Map(rows.map((o) => [o.id, o.name]))
   }
 
   /** Audit trail consumed by the Admin Portal. */

@@ -364,6 +364,7 @@ model Application {
   documents      Json             @default("[]")
   timeline       TimelineEvent[]
   remarks        Comment[]
+  reportRequests ReportRequest[]
   attachments    Attachment[]
   payment        Payment?
   certIssued     Boolean          @default(false)
@@ -389,6 +390,23 @@ model TimelineEvent {
   at            DateTime     @default(now())
 
   @@index([citizenId])
+}
+
+/// "Seek report": an officer asks a colleague a question about an application;
+/// the colleague answers from their own queue.
+model ReportRequest {
+  id            String      @id @default(uuid())
+  application   Application @relation(fields: [applicationId], references: [id])
+  applicationId String
+  requestedById String
+  assignedToId  String
+  question      String
+  answer        String?
+  answeredAt    DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([assignedToId])
+  @@index([applicationId])
 }
 
 model Comment {

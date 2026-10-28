@@ -5,6 +5,7 @@ import { useC } from '@/hooks/useUi'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { useOfficerQueue, useOfficerStats } from '../hooks/useOfficer'
 import { OfficerGrievances } from '../components/OfficerGrievances'
+import { OfficerReportRequests } from '../components/OfficerReportRequests'
 
 /**
  * Officer Portal — the operating workspace for a government officer. Scoped to
@@ -88,6 +89,8 @@ export default function OfficerPortal() {
             </Card>
           )
         })}
+
+        <OfficerReportRequests />
 
         <OfficerGrievances />
 

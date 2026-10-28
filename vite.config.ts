@@ -61,6 +61,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   // host: true listens on every interface, so other devices on the network can open it.
-  server: { host: true, proxy: apiProxy },
+  // allowedHosts admits Cloudflare quick-tunnel links for sharing the demo.
+  server: { host: true, proxy: apiProxy, allowedHosts: ['.trycloudflare.com'] },
   preview: { host: true, proxy: apiProxy },
 }))

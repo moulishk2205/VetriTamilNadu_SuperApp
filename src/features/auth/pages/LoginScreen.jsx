@@ -7,6 +7,7 @@ import { FieldError, LoginHead, LoginPoster, TrustLine } from "../components/Log
 import { useLoginCopy, useResendTimer } from "../hooks/useLoginUi";
 import { LOGIN_CSS } from "../loginCss";
 import { keepMobileCaret, showMobile, toMobile } from "../loginCopy";
+import { DemoOtpHint } from "../components/DemoOtpHint";
 
 // Phone sign-in: the banner poster on top, the form as a sheet rising over it.
 // Same three ways in as before (mobile OTP, Aadhaar OTP, biometric) and the same
@@ -131,6 +132,7 @@ const LoginScreen = ({ onDone }) => {
             <p className="vl-lede" id="vl-otp-sent">
               {method === "otp" ? <>{copy.sentTo[0]}<b>+91 {showMobile(phone)}</b>{copy.sentTo[1]}</> : copy.sentToAadhaar}
             </p>
+            <DemoOtpHint />
 
             <label className="vl-lab" htmlFor="vl-otp">{copy.codeLabel}</label>
             <div className="vl-field" data-invalid={otpErr === "codeInvalid" || otpErr === "codeRejected"}>

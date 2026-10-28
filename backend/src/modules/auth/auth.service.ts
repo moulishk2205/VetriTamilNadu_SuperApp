@@ -69,7 +69,7 @@ export class AuthService implements OnModuleInit {
 
   /** Issue an OTP. With AUTH_MOCK the code is fixed (123456); otherwise it is
    *  random and goes to the user's registered mobile, never into the response. */
-  async requestOtp(dto: RequestOtpDto): Promise<{ sent: boolean; channel: string }> {
+  async requestOtp(dto: RequestOtpDto): Promise<{ sent: boolean; channel: string; demoOtp?: string }> {
     const method: OtpMethod = dto.method === 'aadhaar' ? 'aadhaar' : 'otp'
     const id = this.normalize(method, dto.identifier)
     const identifier = this.hashIdentifier(method, id)
@@ -89,7 +89,9 @@ export class AuthService implements OnModuleInit {
       // and real-mode login fails closed. Never log the code itself.
       if (!this.mock) this.log.warn('OTP issued but not delivered: no SMS connector is configured')
     }
-    return { sent: true, channel: method === 'aadhaar' ? 'aadhaar-linked-mobile' : 'sms' }
+    // In demo mode no SMS goes out, so say so and give the fixed code; the
+    // login screen shows it instead of leaving people waiting for a text.
+    return { sent: true, channel: method === 'aadhaar' ? 'aadhaar-linked-mobile' : 'sms', ...(this.mock ? { demoOtp: MOCK_OTP } : {}) }
   }
 
   /** Verify an OTP → session + tokens. The role comes from the user record only. */

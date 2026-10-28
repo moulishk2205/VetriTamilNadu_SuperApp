@@ -18,10 +18,11 @@ import { STANDARD_GOV_WORKFLOW } from '@/lib/workflow/definitions'
 import { StatTile } from '@/components/charts'
 import { TrustCenter } from '@/features/admin/components/TrustCenter'
 import { ProcessMap } from '@/features/admin/components/ProcessMap'
+import { UserAdmin } from '@/features/admin/components/UserAdmin'
 
 const AuditSchema = z.object({ items: z.array(z.object({ id: z.string(), actor: z.string(), action: z.string(), entity: z.string(), entityId: z.string(), at: z.string(), note: z.string().optional() })), total: z.number() })
 
-const TABS = ['Overview', 'Trust Center', 'Process model', 'Manage', 'Flags', 'Broadcast', 'Logs', 'Audit'] as const
+const TABS = ['Overview', 'Trust Center', 'Process model', 'Users & roles', 'Manage', 'Flags', 'Broadcast', 'Logs', 'Audit'] as const
 
 /** Super Admin Portal — platform administration over the real registries. */
 export default function AdminPortal() {
@@ -116,6 +117,8 @@ export default function AdminPortal() {
         {tab === 'Trust Center' && <TrustCenter />}
 
         {tab === 'Process model' && <ProcessMap />}
+
+        {tab === 'Users & roles' && <UserAdmin />}
 
         {tab === 'Manage' && (
           <div style={{ animation: 'fadeIn 0.3s' }}>

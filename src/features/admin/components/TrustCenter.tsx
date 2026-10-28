@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { ShieldCheck, ShieldAlert, Link2, Timer, Users, KeyRound, RefreshCw, Play } from 'lucide-react'
+import { ShieldCheck, ShieldAlert, Link2, Timer, Users, KeyRound, RefreshCw, Play, Download } from 'lucide-react'
 import { Card, Btn } from '@/components/ui'
 import { useC } from '@/hooks/useUi'
 import { apiClient } from '@/lib/api/client'
@@ -38,6 +38,17 @@ export function TrustCenter() {
     },
   })
 
+  /** Hash-chained audit export (JSON Lines) for an off-site archive. */
+  const exportAudit = async () => {
+    const body = await apiClient.get<string>('/admin/audit/export?days=180')
+    const url = URL.createObjectURL(new Blob([body], { type: 'application/x-ndjson' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `vetri-audit-${new Date().toISOString().slice(0, 10)}.jsonl`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const tone = { on: c.ok, warn: c.warn, off: c.txt3 } as const
   const word = { on: 'In place', warn: 'Attention', off: 'Not yet' } as const
   const chainOk = data?.chain.valid ?? true
@@ -65,6 +76,7 @@ export function TrustCenter() {
           </p>
         </div>
         <Btn variant="outline" icon={RefreshCw} onClick={() => void refetch()} disabled={isFetching}>{isFetching ? 'Verifying…' : 'Re-verify'}</Btn>
+        <Btn variant="outline" icon={Download} onClick={() => void exportAudit()}>Export 180 days</Btn>
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginTop: 10 }}>

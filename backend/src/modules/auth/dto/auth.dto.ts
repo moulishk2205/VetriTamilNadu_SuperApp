@@ -3,7 +3,7 @@ import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator'
 
 const METHODS = ['otp', 'aadhaar', 'biometric'] as const
 const OTP_METHODS = ['otp', 'aadhaar'] as const
-export const DEMO_PERSONAS = ['citizen', 'officer', 'department', 'mla', 'admin'] as const
+export const DEMO_PERSONAS = ['citizen', 'officer', 'checker', 'department', 'mla', 'admin'] as const
 export type DemoPersona = (typeof DEMO_PERSONAS)[number]
 
 export class RequestOtpDto {

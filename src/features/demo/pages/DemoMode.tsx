@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, Shield, Landmark, Settings, Play, CheckCircle, Sparkles, Building2 } from 'lucide-react'
+import { User, Shield, ShieldCheck, Landmark, Settings, Play, CheckCircle, Sparkles, Building2 } from 'lucide-react'
 import { StatusBar, Header, Card, Seal } from '@/components/ui'
 import { useC } from '@/hooks/useUi'
 import { useAuthStore } from '@/store/authStore'
 import { ROLE_HOME, type Role } from '@/lib/rbac/roles'
+import type { DemoPersona } from '@/features/auth/api/authApi'
 
 /**
  * Demo / Presentation Mode — the cockpit for stakeholder demonstrations.
@@ -14,9 +15,10 @@ import { ROLE_HOME, type Role } from '@/lib/rbac/roles'
  * so its role comes from that record, never from the client.
  */
 
-const PERSONAS: { role: Role; label: string; desc: string; icon: typeof User; home: string }[] = [
+const PERSONAS: { role: Role; persona?: DemoPersona; label: string; desc: string; icon: typeof User; home: string }[] = [
   { role: 'citizen', label: 'Citizen', desc: 'Chandramoulishwarar K · Mylapore', icon: User, home: ROLE_HOME.citizen },
   { role: 'officer', label: 'Officer', desc: 'Tmt. R. Kalaivani · Revenue Inspector', icon: Shield, home: ROLE_HOME.officer },
+  { role: 'officer', persona: 'checker', label: 'Approving Officer', desc: 'Thiru. S. Venkatesan · RDO · second signature', icon: ShieldCheck, home: ROLE_HOME.officer },
   { role: 'department', label: 'Department', desc: 'Revenue & Disaster Management', icon: Building2, home: ROLE_HOME.department },
   { role: 'mla', label: 'MLA', desc: 'Mylapore Assembly Constituency', icon: Landmark, home: ROLE_HOME.mla },
   { role: 'admin', label: 'Super Admin', desc: 'Platform administration', icon: Settings, home: ROLE_HOME.admin },
@@ -39,10 +41,10 @@ export default function DemoMode() {
   const c = useC()
   const navigate = useNavigate()
   const loginAsPersona = useAuthStore((s) => s.loginAsPersona)
-  const [busy, setBusy] = useState<Role | null>(null)
+  const [busy, setBusy] = useState<DemoPersona | null>(null)
   const [error, setError] = useState('')
 
-  const enter = async (role: Role, home: string) => {
+  const enter = async (role: DemoPersona, home: string) => {
     setBusy(role)
     setError('')
     try {
@@ -74,7 +76,7 @@ export default function DemoMode() {
         <p style={{ fontSize: 12, fontWeight: 700, color: c.txt3, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>Enter as</p>
         {error && <p role="alert" style={{ fontSize: 12.5, color: c.err, marginBottom: 10 }}>{error}</p>}
         {PERSONAS.map((p) => (
-          <Card key={p.role} onClick={() => busy || enter(p.role, p.home)} style={{ marginBottom: 10, cursor: 'pointer' }}>
+          <Card key={p.persona ?? p.role} onClick={() => busy || enter(p.persona ?? p.role, p.home)} style={{ marginBottom: 10, cursor: 'pointer' }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <div style={{ width: 44, height: 44, borderRadius: 12, background: `${c.pri}10`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <p.icon size={20} color={c.pri} />
@@ -83,7 +85,7 @@ export default function DemoMode() {
                 <p style={{ fontSize: 14, fontWeight: 700, color: c.txt }}>{p.label}</p>
                 <p style={{ fontSize: 12, color: c.txt2 }}>{p.desc}</p>
               </div>
-              {busy === p.role ? (
+              {busy === (p.persona ?? p.role) ? (
                 <div style={{ width: 18, height: 18, border: `2px solid ${c.bdr}`, borderTopColor: c.pri, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
               ) : (
                 <Play size={16} color={c.txt3} />

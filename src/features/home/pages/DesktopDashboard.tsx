@@ -55,7 +55,7 @@ export default function DesktopDashboard() {
       <div className={`vh-lead${en}`} style={enter(0)}>
         <h1 className="vh-hello"><span lang="ta" className="vh-hello-ta">வணக்கம்,</span><span>{first}</span></h1>
         <p aria-live="polite">
-          {board.loading ? 'Loading your dashboard…'
+          {board.loading ? t('Loading your dashboard…')
             : `${urgent.length > 0 ? `${plural(urgent.length, 'thing needs', 'things need')} your action.` : 'Nothing needs your action.'} ${plural(board.inProgress, 'application is', 'applications are')} moving.`}
         </p>
       </div>
@@ -85,24 +85,24 @@ export default function DesktopDashboard() {
         </section>
 
         <section className={`vh-card vh-d${en}`} style={enter(2)} aria-labelledby="h-area">
-          <div className="vh-ch" style={{ paddingBottom: '.5em' }}><h2 id="h-area">Your constituency</h2><button className="vh-link" onClick={() => onNav('mla')}>Full report<ChevronRight size={16} aria-hidden="true" /></button></div>
+          <div className="vh-ch" style={{ paddingBottom: '.5em' }}><h2 id="h-area">{t('Your constituency')}</h2><button className="vh-link" onClick={() => onNav('mla')}>{t('Full report')}<ChevronRight size={16} aria-hidden="true" /></button></div>
           <div className="vh-map"><TamilNaduMap focus={area.constituency} /><span>{area.constituency}</span></div>
           <div className="vh-stats">
-            <p><b>{done}<i>%</i></b><small>completed</small></p>
-            <p><b>{area.stats.avgResolutionDays}</b><small>days to decide</small></p>
-            <p><b>{area.stats.pending}</b><small>in progress</small></p>
+            <p><b>{done}<i>%</i></b><small>{t('completed')}</small></p>
+            <p><b>{area.stats.avgResolutionDays}</b><small>{t('days to decide')}</small></p>
+            <p><b>{area.stats.pending}</b><small>{t('in progress')}</small></p>
           </div>
           {issues.length > 0 && (
             <p style={{ padding: '.75em 1.125em 0', fontSize: '.875em', color: 'var(--ink2)' }}>
-              Most reported here: {issues.map((x, i) => <span key={x.label}>{i > 0 && ', '}<b style={{ color: 'var(--ink)', fontWeight: 600 }}>{x.label.toLowerCase()}</b> ({x.value})</span>)}
+              {t('Most reported here:')} {issues.map((x, i) => <span key={x.label}>{i > 0 && ', '}<b style={{ color: 'var(--ink)', fontWeight: 600 }}>{x.label.toLowerCase()}</b> ({x.value})</span>)}
             </p>
           )}
-          <div style={{ padding: '.75em 1em 1em' }}><button className="vh-btn vh-btn--line" style={{ width: '100%' }} onClick={() => onNav('complaint')}>Report an issue in {area.constituency}<ArrowRight size={17} aria-hidden="true" /></button></div>
+          <div style={{ padding: '.75em 1em 1em' }}><button className="vh-btn vh-btn--line" style={{ width: '100%' }} onClick={() => onNav('complaint')}>{t('Report an issue in')} {area.constituency}<ArrowRight size={17} aria-hidden="true" /></button></div>
         </section>
 
         <section className={`vh-card vh-e${en}`} style={enter(3)} aria-labelledby="h-news">
-          <div className="vh-ch"><h2 id="h-news">Recent updates</h2><button className="vh-link" onClick={() => onNav('notifications')}>All<ChevronRight size={16} aria-hidden="true" /></button></div>
-          {(notifications ?? []).length === 0 && <p style={{ padding: '.2em 1.375em 1.4em', color: 'var(--ink2)', fontSize: '.94em' }}>Updates about your applications and documents will appear here.</p>}
+          <div className="vh-ch"><h2 id="h-news">{t('Recent updates')}</h2><button className="vh-link" onClick={() => onNav('notifications')}>{t('All')}<ChevronRight size={16} aria-hidden="true" /></button></div>
+          {(notifications ?? []).length === 0 && <p style={{ padding: '.2em 1.375em 1.4em', color: 'var(--ink2)', fontSize: '.94em' }}>{t('Updates about your applications and documents will appear here.')}</p>}
           {(notifications ?? []).slice(0, 4).map((n) => (
             <button key={n.id} className="vh-row" style={{ gridTemplateColumns: 'minmax(0,1fr)', padding: '.62em 1.375em' }} onClick={() => onNav(n.actionPath ? n.actionPath.replace(/^\//, '') : 'notifications')}>
               <span><b style={{ fontSize: '.91em' }}>{n.title}</b><small style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.timeLabel ? `${n.timeLabel} · ` : ''}{n.body}</small></span>
@@ -115,7 +115,7 @@ export default function DesktopDashboard() {
           {board.loading ? <div className="vh-skel" /> : urgent.length === 0 ? (
             <div style={{ display: 'flex', gap: 14, padding: '.4em 1.375em 1.4em' }}>
               <CheckCircle2 size={26} color="#1E8E4E" aria-hidden="true" style={{ flexShrink: 0 }} />
-              <p><strong style={{ fontWeight: 650 }}>Nothing needs your action today.</strong><br /><span style={{ color: 'var(--ink2)', fontSize: '.94em' }}>Corrections, decisions and expiring documents will appear here.</span></p>
+              <p><strong style={{ fontWeight: 650 }}>{t('Nothing needs your action today.')}</strong><br /><span style={{ color: 'var(--ink2)', fontSize: '.94em' }}>{t('Corrections, decisions and expiring documents will appear here.')}</span></p>
             </div>
           ) : (
             <>
@@ -130,7 +130,7 @@ export default function DesktopDashboard() {
                 </div>
               ))}
               <p style={{ margin: '.4em 1.375em 0', padding: '.8em 0 1em', borderTop: '1px solid var(--line)', fontSize: '.9em', color: 'var(--ink2)' }}>
-                {urgent.length > 2 ? `${urgent.length - 2} more in Notifications.` : 'Nothing else needs you today.'}
+                {urgent.length > 2 ? `${urgent.length - 2} more in Notifications.` : t('Nothing else needs you today.')}
               </p>
             </>
           )}
@@ -146,12 +146,12 @@ export default function DesktopDashboard() {
               <span className="vh-rail">
                 <span className="vh-st"><i style={{ background: STATE[r.state].dot }} />{STATE[r.state].label ?? (r.status === 'In Progress' ? 'In progress' : r.status)}</span>
                 {r.steps > 0 && <StepRail steps={r.steps} step={r.step} colour={STATE[r.state].dot} complete={r.state === 'done'} track="var(--line)" style={{ maxWidth: 260 }} />}
-                <small className="v-num">{r.state === 'done' ? 'Issued to your Digital Locker' : `Step ${r.step} of ${r.steps} · ${r.stageNow}`}</small>
+                <small className="v-num">{r.state === 'done' ? t('Issued to your Digital Locker') : `Step ${r.step} of ${r.steps} · ${r.stageNow}`}</small>
               </span>
               <span className="vh-due" style={r.state === 'done' ? { color: 'var(--link)', fontWeight: 650 } : undefined}>
-                {r.state === 'done' ? 'Open locker'
-                  : r.daysLeft != null && r.daysLeft < 0 ? <span style={{ color: '#C92A2A', fontWeight: 650 }}>Overdue by<br />{plural(-r.daysLeft, 'day', 'days')}</span>
-                  : r.daysLeft != null ? <>Decision due<br />in {plural(r.daysLeft, 'day', 'days')}</>
+                {r.state === 'done' ? t('Open locker')
+                  : r.daysLeft != null && r.daysLeft < 0 ? <span style={{ color: '#C92A2A', fontWeight: 650 }}>{t('Overdue by')}<br />{plural(-r.daysLeft, 'day', 'days')}</span>
+                  : r.daysLeft != null ? <>{t('Decision due')}<br />in {plural(r.daysLeft, 'day', 'days')}</>
                   : r.stageNext ? <>Next:<br />{r.stageNext}</> : ''}
               </span>
               <ChevronRight size={20} color="var(--chev)" aria-hidden="true" />

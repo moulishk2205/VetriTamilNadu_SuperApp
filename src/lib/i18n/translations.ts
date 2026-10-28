@@ -65,6 +65,21 @@ export const translations: Record<string, string> = {
   'Get Started': 'தொடங்குங்கள்', 'Skip': 'தவிர்', 'Welcome to Vetri TN': 'வெற்றி TN-க்கு வரவேற்கிறோம்',
   // Copy refresh (sentence case, Indian English) and new labels
   'Quick access': 'விரைவு அணுகல்', 'My applications': 'எனது விண்ணப்பங்கள்', 'View all': 'அனைத்தும் காண', 'My complaints': 'எனது புகார்கள்', 'Driving Licence': 'ஓட்டுநர் உரிமம்', 'Open wallet': 'வாலெட் திற', 'Eligible schemes': 'தகுதியான திட்டங்கள்', 'Needs your action': 'உங்கள் நடவடிக்கை தேவை', 'Citizen ID': 'குடிமக்கள் அடையாள எண்', 'District': 'மாவட்டம்', 'Government of Tamil Nadu': 'தமிழ்நாடு அரசு', 'Linked to': 'இணைக்கப்பட்டது', 'Valid until': 'செல்லுபடி', 'Expired': 'காலாவதியானது', 'Report an issue': 'ஒரு பிரச்சினையைப் புகாரளி', 'Received': 'பெறப்பட்டது', 'What happens next': 'அடுத்து என்ன நடக்கும்', 'Copy': 'நகலெடு', 'Copied': 'நகலெடுக்கப்பட்டது',
+  // Web portal dashboard (X8: Tamil on the most-used screen)
+  'Your applications': 'உங்கள் விண்ணப்பங்கள்', 'Apply for a service': 'சேவைக்கு விண்ணப்பிக்க',
+  'Your constituency': 'உங்கள் தொகுதி', 'Recent updates': 'சமீபத்திய அறிவிப்புகள்', 'Full report': 'முழு அறிக்கை',
+  'See all': 'அனைத்தும் காண்க', 'All': 'அனைத்தும்', 'services': 'சேவைகள்',
+  'completed': 'நிறைவு', 'days to decide': 'முடிவுக்கான நாட்கள்', 'in progress': 'நடைமுறையில்',
+  'Most reported here:': 'இங்கு அதிகம் புகாரளிக்கப்பட்டவை:', 'Report an issue in': 'புகார் அளிக்க:',
+  'Nothing needs your action today.': 'இன்று உங்கள் நடவடிக்கை தேவைப்படுவது எதுவும் இல்லை.',
+  'Corrections, decisions and expiring documents will appear here.': 'திருத்தங்கள், முடிவுகள், காலாவதியாகும் ஆவணங்கள் இங்கே தோன்றும்.',
+  'Nothing else needs you today.': 'இன்று வேறு எதுவும் தேவையில்லை.',
+  'Updates about your applications and documents will appear here.': 'உங்கள் விண்ணப்பங்கள், ஆவணங்கள் பற்றிய அறிவிப்புகள் இங்கே தோன்றும்.',
+  'Loading your dashboard…': 'உங்கள் முகப்பு ஏற்றப்படுகிறது…', 'Open locker': 'பெட்டகத்தைத் திற',
+  'Issued to your Digital Locker': 'உங்கள் டிஜிட்டல் பெட்டகத்தில் வழங்கப்பட்டது',
+  'Decision due': 'முடிவு எதிர்பார்ப்பு', 'Overdue by': 'காலக்கெடு தாண்டியது',
+  'Demo server: no SMS is sent. Enter': 'டெமோ சேவையகம்: SMS அனுப்பப்படாது. உள்நுழைய',
+  'to sign in.': 'என்பதை உள்ளிடவும்.',
   // Page titles shown bilingually in the portal header
   'Emergency Directory': 'அவசர உதவி எண்கள்', 'Digital Citizen Timeline': 'டிஜிட்டல் குடிமக்கள் காலவரிசை', 'Help & Support': 'உதவி & ஆதரவு', 'Ask Vetri': 'வெற்றியிடம் கேளுங்கள்', 'Page not found': 'பக்கம் கிடைக்கவில்லை',
 }

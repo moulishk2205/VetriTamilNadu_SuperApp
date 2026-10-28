@@ -20,9 +20,11 @@ const MOCK_OTP = '123456'
 /** Seeded demo persona. Used only while AUTH_MOCK is on. */
 const DEMO_CITIZEN_ID = 'TN-2024-XXXX-8842'
 const DEMO_OFFICER_NAME = 'Tmt. R. Kalaivani'
+/** Second officer for the two-person (maker-checker) approval demo. */
+const DEMO_CHECKER_NAME = 'Thiru. S. Venkatesan'
 
 const PERSONA_ROLE: Record<DemoPersona, Role> = {
-  citizen: Role.CITIZEN, officer: Role.OFFICER, department: Role.DEPARTMENT, mla: Role.MLA, admin: Role.ADMIN,
+  citizen: Role.CITIZEN, officer: Role.OFFICER, checker: Role.OFFICER, department: Role.DEPARTMENT, mla: Role.MLA, admin: Role.ADMIN,
 }
 
 type OtpMethod = 'otp' | 'aadhaar'
@@ -226,10 +228,11 @@ export class AuthService implements OnModuleInit {
       if (!citizen) throw new UnauthorizedException('Demo citizen is not seeded')
       return this.userForCitizen(citizen)
     }
-    const officer = persona === 'officer'
-      ? await this.prisma.officer.findFirst({ where: { name: DEMO_OFFICER_NAME }, orderBy: { createdAt: 'asc' } })
+    const officerName = persona === 'officer' ? DEMO_OFFICER_NAME : persona === 'checker' ? DEMO_CHECKER_NAME : null
+    const officer = officerName
+      ? await this.prisma.officer.findFirst({ where: { name: officerName }, orderBy: { createdAt: 'asc' } })
       : null
-    if (persona === 'officer' && !officer) throw new UnauthorizedException('Demo officer is not seeded')
+    if (officerName && !officer) throw new UnauthorizedException('Demo officer is not seeded')
     const mobile = `demo-${persona}`
     return this.prisma.user.upsert({
       where: { mobile },

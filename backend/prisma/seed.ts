@@ -169,6 +169,11 @@ async function main() {
       },
     }))
   }
+  // Senior officer in the demo officer's district and department: the checker
+  // who approves what Tmt. R. Kalaivani recommends (two-person rule).
+  officers.push(await prisma.officer.create({
+    data: { name: 'Thiru. S. Venkatesan', designation: 'Revenue Divisional Officer', jurisdiction: 'Chennai South Division', district: 'Chennai', departmentId: departments[0].id },
+  }))
   console.log(`  ✓ ${officers.length} officers`)
 
   /* schemes --------------------------------------------------------------- */
@@ -281,6 +286,8 @@ async function main() {
         statusLabel: a.stage === ApplicationStage.completed ? 'Completed' : 'In Progress',
         officerId: officers[0].id, departmentId: departments[0].id, certIssued: a.stage === ApplicationStage.completed,
         createdAt, ...timing(a.slug, a.stage, createdAt, 1),
+        // Recommended by the demo officer, so only the checker can approve it.
+        ...(a.stage === ApplicationStage.approval ? { makerOfficerId: officers[0].id } : {}),
       },
     })
   }

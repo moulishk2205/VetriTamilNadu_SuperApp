@@ -66,7 +66,7 @@ export default function DemoMode() {
             <Seal size={40} />
             <div>
               <p style={{ fontSize: 15, fontWeight: 800, color: c.txt }}>Vetri Tamil Nadu</p>
-              <p style={{ fontSize: 12, color: c.txt2 }}>Digital Governance Platform · fully offline demo</p>
+              <p style={{ fontSize: 12, color: c.txt2 }}>Digital Governance Platform · live demo on seeded data</p>
             </div>
           </div>
         </Card>
@@ -106,7 +106,7 @@ export default function DemoMode() {
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <CheckCircle size={16} color={c.ok} style={{ marginTop: 2, flexShrink: 0 }} />
             <p style={{ fontSize: 12, color: c.txt2, lineHeight: 1.5 }}>
-              Every screen runs against the embedded backend — no internet required. Data resets on reload for a clean demo.
+              Every screen runs against the real API and database, seeded with demo citizens and applications. Personas exist only while demo sign-in is switched on.
             </p>
           </div>
         </Card>

@@ -127,7 +127,7 @@ const HomeDashboard = ({onNav}) => { const c=useC(); const t=useT(); const {dark
                 <StepRail steps={a.steps} step={a.step} colour={s.dot} complete={a.state==="done"} track={c.bdr} style={{marginTop:12}}/>
                 <div style={{display:"flex",justifyContent:"space-between",gap:10,marginTop:7}}>
                   <span className="v-num" style={{fontSize:11,color:c.txt2,minWidth:0}}>{a.state==="done"?"Issued to your Digital Locker":`Step ${a.step} of ${a.steps} · ${a.stageNow}`}</span>
-                  {a.daysLeft!=null&&<span className="v-num" style={{fontSize:11,fontWeight:650,color:c.txt,whiteSpace:"nowrap"}}>{a.daysLeft} {a.daysLeft===1?"day":"days"} left</span>}
+                  {a.daysLeft!=null&&<span className="v-num" style={{fontSize:11,fontWeight:650,color:a.daysLeft<0?c.err:c.txt,whiteSpace:"nowrap"}}>{a.daysLeft<0?`Overdue ${-a.daysLeft} ${a.daysLeft===-1?"day":"days"}`:`${a.daysLeft} ${a.daysLeft===1?"day":"days"} left`}</span>}
                 </div>
               </Card>);})}
           </div>

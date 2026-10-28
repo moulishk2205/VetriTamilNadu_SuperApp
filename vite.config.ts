@@ -41,6 +41,17 @@ function contentSecurityPolicy(api: string | null): Plugin {
   }
 }
 
+/**
+ * `/api` is proxied to the backend, so with VITE_API_BASE_URL=/api every device
+ * (a phone on the same Wi-Fi, a tunnel visitor) talks to one origin and the
+ * certificate QR links resolve from anywhere. `xfwd` passes the visitor's
+ * address on, so the backend (with TRUST_PROXY=1) rate-limits each person, not
+ * the proxy. Set API_PROXY_TARGET to point at a backend other than :4000.
+ */
+const apiProxy = {
+  '/api': { target: process.env.API_PROXY_TARGET ?? 'http://localhost:4000', changeOrigin: false, xfwd: true },
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   plugins: [react(), contentSecurityPolicy(apiOrigin(loadEnv(mode, process.cwd(), 'VITE_')))],
@@ -49,4 +60,7 @@ export default defineConfig(({ mode }) => ({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  // host: true listens on every interface, so other devices on the network can open it.
+  server: { host: true, proxy: apiProxy },
+  preview: { host: true, proxy: apiProxy },
 }))

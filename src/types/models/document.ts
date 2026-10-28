@@ -21,5 +21,7 @@ export const DocumentSchema = z.object({
   issuedAt: z.string().optional(),
   version: z.number().int().default(1),
   fileUrl: z.string().optional(),
+  /** Signature checked by the public /verify page behind the certificate QR. */
+  verifySig: z.string().optional(),
 })
 export type WalletDocument = z.infer<typeof DocumentSchema>

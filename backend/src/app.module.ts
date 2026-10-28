@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
 import { LoggerModule } from 'nestjs-pino'
 import configuration from './config/configuration'
 import { PrismaModule } from './prisma/prisma.module'
+import { AuditModule } from './common/audit/audit.service'
 import { IntegrationsModule } from './integrations/integrations.module'
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard'
 import { RolesGuard } from './common/guards/roles.guard'
@@ -22,6 +23,7 @@ import { ComplaintsModule } from './modules/complaints/complaints.module'
 import { SearchModule } from './modules/search/search.module'
 import { AiModule } from './modules/ai/ai.module'
 import { HealthModule } from './modules/health/health.module'
+import { AdminModule } from './modules/admin/admin.controller'
 
 @Module({
   imports: [
@@ -40,6 +42,7 @@ import { HealthModule } from './modules/health/health.module'
       ],
     }),
     PrismaModule,
+    AuditModule,
     IntegrationsModule,
     AuthModule,
     CatalogModule,
@@ -53,6 +56,7 @@ import { HealthModule } from './modules/health/health.module'
     SearchModule,
     AiModule,
     HealthModule,
+    AdminModule,
   ],
   providers: [
     // Order matters: throttle → authenticate → authorize.

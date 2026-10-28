@@ -16,7 +16,7 @@ export type DepartmentAnalytics = z.infer<typeof DepartmentAnalyticsSchema>
 
 export const ConstituencyAnalyticsSchema = z.object({
   constituency: z.string(), district: z.string(), mla: z.string(),
-  stats: z.object({ submitted: z.number(), completed: z.number(), pending: z.number(), avgResolutionDays: z.number(), satisfaction: z.number(), schemeUtilisation: z.number() }),
+  stats: z.object({ submitted: z.number(), completed: z.number(), pending: z.number(), avgResolutionDays: z.number(), satisfaction: z.number().nullable(), schemeUtilisation: z.number().nullable() }),
   monthlyTrend: z.array(Point), topServices: z.array(Point), topComplaints: z.array(Point),
   departmentPerformance: z.array(HPoint), demographics: z.array(HPoint), wardComparison: z.array(Point),
   heat: z.object({ rows: z.array(z.string()), cols: z.array(z.string()), cells: z.array(z.array(z.number())) }),

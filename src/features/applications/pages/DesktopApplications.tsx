@@ -170,7 +170,9 @@ export default function DesktopApplications() {
 
                 {selected.slaDaysRemaining != null && (
                   <p style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${c.bdr}`, fontSize: 12, color: c.txt2 }}>
-                    <span className="vtn-num" style={{ fontWeight: 700, color: c.warn }}>{selected.slaDaysRemaining} days</span> remaining under the Right to Service charter.
+                    {selected.slaDaysRemaining < 0
+                      ? <><span className="vtn-num" style={{ fontWeight: 700, color: c.err }}>Overdue by {-selected.slaDaysRemaining} day{selected.slaDaysRemaining === -1 ? '' : 's'}</span> under the Right to Service charter. The department has been alerted.</>
+                      : <><span className="vtn-num" style={{ fontWeight: 700, color: c.warn }}>{selected.slaDaysRemaining} days</span> remaining under the Right to Service charter.</>}
                   </p>
                 )}
               </Panel>

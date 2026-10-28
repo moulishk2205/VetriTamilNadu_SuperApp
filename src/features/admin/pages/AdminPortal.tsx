@@ -16,10 +16,12 @@ import { TN_DISTRICTS } from '@/features/services/catalog/geo'
 import { ROLE_PERMISSIONS } from '@/lib/rbac/roles'
 import { STANDARD_GOV_WORKFLOW } from '@/lib/workflow/definitions'
 import { StatTile } from '@/components/charts'
+import { TrustCenter } from '@/features/admin/components/TrustCenter'
+import { ProcessMap } from '@/features/admin/components/ProcessMap'
 
 const AuditSchema = z.object({ items: z.array(z.object({ id: z.string(), actor: z.string(), action: z.string(), entity: z.string(), entityId: z.string(), at: z.string(), note: z.string().optional() })), total: z.number() })
 
-const TABS = ['Overview', 'Manage', 'Flags', 'Broadcast', 'Logs', 'Audit'] as const
+const TABS = ['Overview', 'Trust Center', 'Process model', 'Manage', 'Flags', 'Broadcast', 'Logs', 'Audit'] as const
 
 /** Super Admin Portal — platform administration over the real registries. */
 export default function AdminPortal() {
@@ -87,7 +89,7 @@ export default function AdminPortal() {
               <StatTile label="Roles" value={Object.keys(ROLE_PERMISSIONS).length} />
               <StatTile label="Workflow Stages" value={STANDARD_GOV_WORKFLOW.stages.length} />
               <StatTile label="Integrations" value={health ? Object.keys(health).length : '—'} />
-              <StatTile label="Uptime" value="99.9%" color={c.ok} />
+              <StatTile label="Audit trail" value="Chained" color={c.ok} />
             </div>
             {sec('API & Integration Health')}
             <Card style={{ padding: 0 }}>
@@ -103,29 +105,33 @@ export default function AdminPortal() {
             </Card>
             {sec('System')}
             <Card style={{ padding: 0 }}>
-              {row(ShieldCheck, 'Security posture', 'JWT + refresh · RBAC', 0, 4)}
-              {row(Activity, 'Monitoring', 'Structured logs + audit', 1, 4)}
-              {row(FileText, 'Storage', 'Encrypted-at-rest seam', 2, 4)}
-              {row(GitBranch, 'Backup / DR', 'Config-as-data, replayable', 3, 4)}
+              {row(ShieldCheck, 'Security posture', 'Session-bound JWT · RBAC · see Trust Center', 0, 4)}
+              {row(Activity, 'Monitoring', 'Structured logs + hash-chained audit', 1, 4)}
+              {row(FileText, 'Storage', 'Not yet encrypted at rest', 2, 4)}
+              {row(GitBranch, 'Backup / DR', 'Not yet configured', 3, 4)}
             </Card>
           </div>
         )}
 
+        {tab === 'Trust Center' && <TrustCenter />}
+
+        {tab === 'Process model' && <ProcessMap />}
+
         {tab === 'Manage' && (
           <div style={{ animation: 'fadeIn 0.3s' }}>
-            {sec('Registries (config-as-data)')}
+            {sec('Registries')}
             <Card style={{ padding: 0 }}>
-              {row(Users, 'Citizens', '1 seeded · CAN-linked', 0, 7)}
-              {row(Users, 'Officers', '4 active', 1, 7)}
-              {row(Building2, 'Departments', '9 mapped', 2, 7)}
-              {row(FileText, 'Services & metadata', `${SERVICE_META.length} verified`, 3, 7)}
-              {row(FileText, 'Form definitions', `${SERVICE_META.length} live`, 4, 7)}
-              {row(GitBranch, 'Workflows', 'gov.standard.v1', 5, 7)}
-              {row(Plug, 'Integration adapters', '11 registered', 6, 7)}
+              {row(Users, 'Citizens', '1,001 seeded (demo population)', 0, 7)}
+              {row(Users, 'Officers', '100 seeded', 1, 7)}
+              {row(Building2, 'Departments', '20 seeded', 2, 7)}
+              {row(FileText, 'Services & metadata', `${SERVICE_META.length} in catalogue`, 3, 7)}
+              {row(FileText, 'Form definitions', `${SERVICE_META.length} schema-driven`, 4, 7)}
+              {row(GitBranch, 'Workflows', 'gov.standard.v1 · BPMN export', 5, 7)}
+              {row(Plug, 'Integration adapters', '10 mock adapters', 6, 7)}
             </Card>
             <Card style={{ marginTop: 10, background: `${c.info}06`, border: `1px solid ${c.info}15` }}>
               <p style={{ fontSize: 12, color: c.txt2, lineHeight: 1.5 }}>
-                Every registry is data, not code — services, forms, workflows and adapters are added by configuration. New portals mount behind existing RBAC guards.
+                Forms are rendered from schemas and the workflow exports to BPMN 2.0, but services, forms and workflows are still defined in code. An admin-editable registry and a BPMN/DMN engine are the next build phase.
               </p>
             </Card>
           </div>

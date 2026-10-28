@@ -78,8 +78,8 @@ export default function MlaPortal() {
               <StatTile label="Completed" value={data.stats.completed.toLocaleString('en-IN')} color={c.ok} />
               <StatTile label="Pending" value={data.stats.pending} color={c.warn} />
               <StatTile label="Avg Resolution" value={`${data.stats.avgResolutionDays}d`} />
-              <StatTile label="Satisfaction" value={`${data.stats.satisfaction}/5`} color={c.secDk} />
-              <StatTile label="Scheme Uptake" value={`${data.stats.schemeUtilisation}%`} color={c.info} />
+              <StatTile label="Satisfaction" value={data.stats.satisfaction == null ? 'Not yet collected' : `${data.stats.satisfaction}/5`} color={c.secDk} />
+              <StatTile label="Scheme Uptake" value={data.stats.schemeUtilisation == null ? 'Not yet collected' : `${data.stats.schemeUtilisation}%`} color={c.info} />
             </div>
             {sec('Department Performance')}
             <Card><HBars data={data.departmentPerformance} color={c.ok} /></Card>

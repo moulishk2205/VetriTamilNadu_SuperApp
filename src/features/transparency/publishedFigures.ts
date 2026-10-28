@@ -38,7 +38,7 @@ export const PUBLISHED_DEPARTMENT: DepartmentAnalytics = {
 export const PUBLISHED_CONSTITUENCY: ConstituencyAnalytics = {
   constituency: 'Mylapore', district: 'Chennai',
   mla: 'Hon. Member of Legislative Assembly, Mylapore',
-  stats: { submitted: 4231, completed: 3867, pending: 296, avgResolutionDays: 5.2, satisfaction: 4.3, schemeUtilisation: 78 },
+  stats: { submitted: 4231, completed: 3867, pending: 296, avgResolutionDays: 5.2, satisfaction: null, schemeUtilisation: null },
   monthlyTrend: MONTHS.map((label, i) => ({ label, value: [520, 588, 641, 702, 745, 790][i] })),
   topServices: [
     { label: 'Income Cert', value: 1240 }, { label: 'Community', value: 918 },

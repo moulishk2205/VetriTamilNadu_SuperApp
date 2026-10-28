@@ -110,9 +110,9 @@ export default function DesktopTransparency({ view = 'district' }: { view?: 'dis
 
           <Panel title="Citizen satisfaction">
             <div style={{ textAlign: 'center', padding: '8px 0' }}>
-              <p className="vtn-num" style={{ fontSize: 46, fontWeight: 800, color: c.ok, lineHeight: 1 }}>{d.stats.satisfaction}</p>
-              <p style={{ fontSize: 13, color: c.txt2, marginTop: 6 }}>out of 5 · citizen-rated</p>
-              <div style={{ marginTop: 14 }}><StatusChip label={`Scheme utilisation ${d.stats.schemeUtilisation}%`} tone="info" /></div>
+              <p className="vtn-num" style={{ fontSize: 46, fontWeight: 800, color: d.stats.satisfaction == null ? c.txt3 : c.ok, lineHeight: 1 }}>{d.stats.satisfaction ?? '—'}</p>
+              <p style={{ fontSize: 13, color: c.txt2, marginTop: 6 }}>{d.stats.satisfaction == null ? 'Not collected yet: ratings open with the feedback module' : 'out of 5 · citizen-rated'}</p>
+              {d.stats.schemeUtilisation != null && <div style={{ marginTop: 14 }}><StatusChip label={`Scheme utilisation ${d.stats.schemeUtilisation}%`} tone="info" /></div>}
             </div>
           </Panel>
         </div>
@@ -131,7 +131,7 @@ export default function DesktopTransparency({ view = 'district' }: { view?: 'dis
         </div>
 
         <div className="vtn-split">
-          <Panel title="Ward comparison">
+          <Panel title="Taluk comparison">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
               {d.wardComparison.map((s) => <Bar key={s.label} label={s.label} value={s.value} max={maxWard} color={c.info} />)}
             </div>

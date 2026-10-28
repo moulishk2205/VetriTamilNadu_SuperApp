@@ -1,91 +1,136 @@
 import { Injectable } from '@nestjs/common'
-import { ApplicationStage } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 
-const MONTHS = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul']
-const NON_TERMINAL = { notIn: [ApplicationStage.completed, ApplicationStage.rejected] }
+type Point = { label: string; value: number }
+
+/** The department and constituency these dashboards describe. */
+const DEPARTMENT = 'Revenue & Disaster Management'
+const DISTRICT = 'Chennai'
 
 /**
- * Analytics — department & constituency (MLA) aggregates. Live totals are
- * derived from the application table; historic series are charter-plausible
- * seeded aggregates a real backend would materialise from workflow events.
+ * Analytics: every figure below is computed live from the operational tables,
+ * so dashboards move as applications are filed and decided during a demo.
+ * Measures with no source data yet (citizen satisfaction, scheme utilisation)
+ * are returned as null rather than invented.
  */
 @Injectable()
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async live() {
-    const [done, rejected, pending, total] = await Promise.all([
-      this.prisma.application.count({ where: { stage: ApplicationStage.completed } }),
-      this.prisma.application.count({ where: { stage: ApplicationStage.rejected } }),
-      this.prisma.application.count({ where: { stage: NON_TERMINAL, deletedAt: null } }),
-      this.prisma.application.count({ where: { deletedAt: null } }),
-    ])
-    return { done, rejected, pending, total }
+  /** Applications per month for the last six months (empty months as 0). */
+  private async monthly(scope: Prisma.Sql): Promise<Point[]> {
+    const rows = await this.prisma.$queryRaw<{ m: Date; n: number }[]>`
+      SELECT date_trunc('month', a."createdAt") AS m, count(*)::int AS n
+      FROM "Application" a JOIN "Citizen" c ON c.id = a."citizenId"
+      WHERE a."deletedAt" IS NULL AND a."createdAt" >= date_trunc('month', now()) - interval '5 months' AND ${scope}
+      GROUP BY 1`
+    const byMonth = new Map(rows.map((r) => [`${r.m.getUTCFullYear()}-${r.m.getUTCMonth()}`, r.n]))
+    const now = new Date()
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5 + i, 1))
+      return { label: d.toLocaleString('en-IN', { month: 'short', timeZone: 'UTC' }), value: byMonth.get(`${d.getUTCFullYear()}-${d.getUTCMonth()}`) ?? 0 }
+    })
+  }
+
+  private async totals(scope: Prisma.Sql) {
+    const [t] = await this.prisma.$queryRaw<{ total: number; today: number; month: number; pending: number; completed: number; rejected: number; escalated: number; overdue: number; avg_days: number | null }[]>`
+      SELECT count(*)::int AS total,
+             count(*) FILTER (WHERE a."createdAt" >= date_trunc('day', now()))::int AS today,
+             count(*) FILTER (WHERE a."createdAt" >= now() - interval '30 days')::int AS month,
+             count(*) FILTER (WHERE a.stage NOT IN ('completed','rejected'))::int AS pending,
+             count(*) FILTER (WHERE a.stage = 'completed')::int AS completed,
+             count(*) FILTER (WHERE a.stage = 'rejected')::int AS rejected,
+             count(*) FILTER (WHERE a.stage = 'escalation')::int AS escalated,
+             count(*) FILTER (WHERE a.stage NOT IN ('completed','rejected') AND a."slaDeadline" < now())::int AS overdue,
+             avg(EXTRACT(EPOCH FROM (a."updatedAt" - a."createdAt")) / 86400) FILTER (WHERE a.stage = 'completed')::float AS avg_days
+      FROM "Application" a JOIN "Citizen" c ON c.id = a."citizenId"
+      WHERE a."deletedAt" IS NULL AND ${scope}`
+    return t
+  }
+
+  private async top(scope: Prisma.Sql, column: Prisma.Sql, limit = 5): Promise<Point[]> {
+    return this.prisma.$queryRaw<Point[]>`
+      SELECT ${column} AS label, count(*)::int AS value
+      FROM "Application" a JOIN "Citizen" c ON c.id = a."citizenId"
+      WHERE a."deletedAt" IS NULL AND ${scope}
+      GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT ${limit}`
   }
 
   async department() {
-    const live = await this.live()
-    const officers = await this.prisma.officer.findMany({ take: 3, orderBy: { createdAt: 'asc' } })
+    const dept = await this.prisma.department.findFirst({ where: { name: DEPARTMENT } })
+    const scope = Prisma.sql`a."departmentId" = ${dept?.id ?? ''}`
+    const [t, monthlyTrend, serviceDemand, districtComparison, officers] = await Promise.all([
+      this.totals(scope),
+      this.monthly(scope),
+      this.top(scope, Prisma.sql`a."serviceName"`),
+      this.top(scope, Prisma.sql`c.district`),
+      this.prisma.$queryRaw<{ name: string; designation: string; completed: number; on_time: number }[]>`
+        SELECT o.name, o.designation, count(a.id)::int AS completed,
+               count(a.id) FILTER (WHERE a."slaDeadline" IS NULL OR a."updatedAt" <= a."slaDeadline")::int AS on_time
+        FROM "Officer" o JOIN "Application" a ON a."officerId" = o.id AND a.stage = 'completed' AND a."deletedAt" IS NULL
+        WHERE o."departmentId" = ${dept?.id ?? ''} AND o."deletedAt" IS NULL
+        GROUP BY o.id, o.name, o.designation`,
+    ])
+    const perf = officers.map((o) => ({ name: o.name, designation: o.designation, completed: o.completed, sla: Math.round((o.on_time / o.completed) * 100) }))
     return {
-      department: 'Revenue & Disaster Management',
-      today: 34 + live.total, month: 1180, pending: 126 + live.pending,
-      approved: 982 + live.done, rejected: 41 + live.rejected,
-      avgSlaDays: 4.6, overdue: 17, escalations: 9,
-      monthlyTrend: MONTHS.map((m, i) => ({ label: m, value: [820, 940, 1010, 1105, 1160, 1180 + live.total][i] })),
-      serviceDemand: [
-        { label: 'Income', value: 412 }, { label: 'Community', value: 318 },
-        { label: 'Patta', value: 214 }, { label: 'Birth', value: 156 }, { label: 'Death', value: 80 },
-      ],
-      districtComparison: [
-        { label: 'Chennai', value: 1180 }, { label: 'Coimbatore', value: 964 },
-        { label: 'Madurai', value: 842 }, { label: 'Trichy', value: 733 }, { label: 'Salem', value: 651 },
-      ],
-      topOfficers: officers.map((o, i) => ({ name: o.name, designation: o.designation, completed: [63, 51, 44][i], sla: [98, 96, 93][i] })),
-      slowestOfficers: [{ name: 'Thiru. D. Prakash', designation: 'Deputy Tahsildar', completed: 12, sla: 71 }],
+      department: DEPARTMENT,
+      today: t.today, month: t.month, pending: t.pending, approved: t.completed, rejected: t.rejected,
+      avgSlaDays: Math.round((t.avg_days ?? 0) * 10) / 10, overdue: t.overdue, escalations: t.escalated,
+      monthlyTrend, serviceDemand, districtComparison,
+      topOfficers: [...perf].sort((a, b) => b.completed - a.completed || b.sla - a.sla).slice(0, 3),
+      slowestOfficers: [...perf].sort((a, b) => a.sla - b.sla || b.completed - a.completed).slice(0, 1),
     }
   }
 
   async constituency() {
-    const live = await this.live()
+    const scope = Prisma.sql`c.district = ${DISTRICT}`
+    const [t, monthlyTrend, topServices, talukRows, complaints, deptRows, citizens, heatRows] = await Promise.all([
+      this.totals(scope),
+      this.monthly(scope),
+      this.top(scope, Prisma.sql`a."serviceName"`),
+      this.top(scope, Prisma.sql`c.taluk`, 6),
+      this.prisma.$queryRaw<Point[]>`
+        SELECT k.category AS label, count(*)::int AS value FROM "Complaint" k JOIN "Citizen" c ON c.id = k."citizenId"
+        WHERE k."deletedAt" IS NULL AND ${scope} GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 4`,
+      this.prisma.$queryRaw<{ label: string; done: number; total: number }[]>`
+        SELECT d.name AS label, count(*) FILTER (WHERE a.stage = 'completed')::int AS done, count(*)::int AS total
+        FROM "Application" a JOIN "Citizen" c ON c.id = a."citizenId" JOIN "Department" d ON d.id = a."departmentId"
+        WHERE a."deletedAt" IS NULL AND ${scope} GROUP BY 1 ORDER BY 3 DESC LIMIT 5`,
+      this.prisma.citizen.findMany({ where: { district: DISTRICT, deletedAt: null, applications: { some: {} } }, select: { gender: true, dob: true } }),
+      this.prisma.$queryRaw<{ svc: string; taluk: string; n: number }[]>`
+        SELECT a."serviceName" AS svc, c.taluk, count(*)::int AS n
+        FROM "Application" a JOIN "Citizen" c ON c.id = a."citizenId"
+        WHERE a."deletedAt" IS NULL AND ${scope} GROUP BY 1, 2`,
+    ])
+    const age = (dob: string) => {
+      const year = Number(/(\d{4})\s*$/.exec(dob.trim())?.[1])
+      return Number.isFinite(year) ? new Date().getFullYear() - year : null
+    }
+    const ages = citizens.map((c) => age(c.dob)).filter((a): a is number => a !== null)
+    const rows = topServices.slice(0, 4).map((s) => s.label)
+    const cols = talukRows.map((s) => s.label)
     return {
-      constituency: 'Mylapore', district: 'Chennai',
-      mla: 'Hon. Member of Legislative Assembly, Mylapore',
+      constituency: 'Mylapore',
+      district: DISTRICT,
+      mla: `Hon. MLA, Mylapore · live figures for ${DISTRICT} district`,
       stats: {
-        submitted: 4231 + live.total, completed: 3867 + live.done, pending: 296 + live.pending,
-        avgResolutionDays: 5.2, satisfaction: 4.3, schemeUtilisation: 78,
+        submitted: t.total, completed: t.completed, pending: t.pending,
+        avgResolutionDays: Math.round((t.avg_days ?? 0) * 10) / 10,
+        satisfaction: null, schemeUtilisation: null,
       },
-      monthlyTrend: MONTHS.map((m, i) => ({ label: m, value: [520, 588, 641, 702, 745, 790 + live.total][i] })),
-      topServices: [
-        { label: 'Income Cert', value: 1240 }, { label: 'Community', value: 918 },
-        { label: 'Ration Card', value: 704 }, { label: 'Patta', value: 512 }, { label: 'Birth Cert', value: 431 },
-      ],
-      topComplaints: [
-        { label: 'Road Damage', value: 214 }, { label: 'Water Supply', value: 168 },
-        { label: 'Streetlight', value: 122 }, { label: 'Garbage', value: 96 },
-      ],
-      departmentPerformance: [
-        { label: 'Revenue', value: 94, suffix: '%' }, { label: 'Civil Supplies', value: 91, suffix: '%' },
-        { label: 'GCC', value: 87, suffix: '%' }, { label: 'Transport', value: 84, suffix: '%' },
-        { label: 'Registration', value: 82, suffix: '%' },
-      ],
+      monthlyTrend, topServices, topComplaints: complaints,
+      departmentPerformance: deptRows.map((d) => ({ label: d.label.split(' ')[0], value: d.total ? Math.round((d.done / d.total) * 100) : 0, suffix: '%' })),
       demographics: [
-        { label: 'Women beneficiaries', value: 1832 }, { label: 'Students / Youth', value: 1114 },
-        { label: 'Senior citizens', value: 689 }, { label: 'Farmers', value: 402 }, { label: 'Disabled citizens', value: 194 },
+        { label: 'Women applicants', value: citizens.filter((c) => /^f/i.test(c.gender)).length },
+        { label: 'Youth (18–30)', value: ages.filter((a) => a >= 18 && a <= 30).length },
+        { label: 'Senior citizens (60+)', value: ages.filter((a) => a >= 60).length },
       ],
-      wardComparison: [
-        { label: 'Ward 121', value: 312 }, { label: 'Ward 122', value: 287 }, { label: 'Ward 123', value: 341 },
-        { label: 'Ward 124', value: 268 }, { label: 'Ward 125', value: 224 }, { label: 'Ward 126', value: 373 },
-      ],
+      wardComparison: talukRows,
       heat: {
-        rows: ['Income', 'Ration', 'Patta', 'Birth'],
-        cols: ['W121', 'W122', 'W123', 'W124', 'W125', 'W126'],
-        cells: [
-          [42, 38, 51, 33, 29, 58],
-          [31, 27, 36, 22, 19, 41],
-          [18, 14, 22, 12, 9, 26],
-          [12, 16, 19, 11, 8, 21],
-        ],
+        rows,
+        cols,
+        cells: rows.map((r) => cols.map((col) => heatRows.find((h) => h.svc === r && h.taluk === col)?.n ?? 0)),
       },
     }
   }

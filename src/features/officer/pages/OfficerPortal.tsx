@@ -28,7 +28,7 @@ export default function OfficerPortal() {
   const perf = [
     { l: 'Avg Processing', v: stats ? `${stats.avgProcessingDays}d` : '—' },
     { l: 'Approval Rate', v: stats ? `${stats.approvalRate}%` : '—' },
-    { l: 'Citizen Rating', v: stats ? `${stats.citizenRating}/5` : '—' },
+    { l: 'Citizen Rating', v: stats?.citizenRating != null ? `${stats.citizenRating}/5` : 'Not yet collected' },
     { l: 'SLA Compliance', v: stats ? `${stats.slaCompliance}%` : '—' },
     { l: 'Dept Rank', v: stats ? `#${stats.departmentRank}` : '—' },
   ]
@@ -75,7 +75,11 @@ export default function OfficerPortal() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 14, fontWeight: 600, color: c.txt }}>{a.serviceName}</p>
                   <p style={{ fontSize: 11, color: c.txt2, fontFamily: 'monospace' }}>{a.referenceNo}</p>
-                  {a.slaDaysRemaining != null && <p style={{ fontSize: 10, color: c.txt3, marginTop: 2 }}>SLA: {a.slaDaysRemaining} day(s) at this stage</p>}
+                  {a.slaDaysRemaining != null && (
+                    <p style={{ fontSize: 10, color: a.slaDaysRemaining < 0 ? c.err : a.slaDaysRemaining <= 1 ? c.warn : c.txt3, fontWeight: a.slaDaysRemaining < 0 ? 700 : 400, marginTop: 2 }}>
+                      {a.slaDaysRemaining < 0 ? `Overdue by ${-a.slaDaysRemaining} day(s): Right to Services deadline missed` : `Right to Services deadline in ${a.slaDaysRemaining} day(s)`}
+                    </p>
+                  )}
                 </div>
                 <span style={{ fontSize: 10, fontWeight: 600, color: tone, padding: '4px 8px', background: `${tone}15`, borderRadius: 9999, whiteSpace: 'nowrap' }}>{a.status}</span>
                 <ChevronRight size={16} color={c.txt3} />

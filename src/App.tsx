@@ -12,6 +12,7 @@ import { usePlatformStore, type Platform } from '@/store/platformStore'
 // The original startup animation — part of the product identity. It plays
 // full-screen before BOTH experiences, with its original timing and sequence.
 const SplashScreen = lazy(() => import('@/features/auth/pages/SplashScreen'))
+const VerifyCertificate = lazy(() => import('@/features/verify/VerifyCertificate'))
 
 /**
  * Every new screen opens at the top. Without this the window keeps the scroll
@@ -56,6 +57,18 @@ export default function App() {
   // Tracks which experience the intro has already played for, so it replays
   // whenever the presenter switches experience.
   const [introShownFor, setIntroShownFor] = useState<Platform | null>(null)
+
+  // Certificate QR links open straight on the public check: no picker, no sign-in.
+  if (window.location.pathname.startsWith('/verify/')) {
+    return (
+      <>
+        <style>{CSS}</style>
+        <Suspense fallback={null}>
+          <VerifyCertificate />
+        </Suspense>
+      </>
+    )
+  }
 
   if (!platform) {
     return (

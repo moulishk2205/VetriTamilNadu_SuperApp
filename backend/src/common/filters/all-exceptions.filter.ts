@@ -1,7 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { Request, Response } from 'express'
-import { PrismaService } from '../../prisma/prisma.service'
+import { AuditService } from '../audit/audit.service'
 import { auditRequest } from '../interceptors/audit.interceptor'
 
 /** Prisma errors a client may legitimately cause, mapped to generic messages. */
@@ -27,7 +27,7 @@ function isClientError(e: unknown): e is { status: number } {
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('Exception')
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly audit: AuditService) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp()
@@ -57,7 +57,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = text
     }
 
-    auditRequest(this.prisma, req, status)
+    auditRequest(this.audit, req, status)
 
     if (status >= 500) {
       const detail = exception instanceof Error ? exception.stack ?? exception.message : String(exception)

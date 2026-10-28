@@ -12,6 +12,16 @@ const SVC_CODE: Record<string, string> = {
   svc_rctransfer: 'RCT', svc_duprc: 'DRC', svc_mvtax: 'MVT', svc_echallan: 'ECH', svc_proptax: 'PTX', svc_water: 'WTR',
 }
 
+const DAY = 86_400_000
+
+/** Charter processing time ("15d", "Same day", …) in days; 30 when unpublished. */
+export function charterDays(processingTime: string | null | undefined): number {
+  if (!processingTime) return 30
+  if (/same day/i.test(processingTime)) return 1
+  const days = Number(/(\d+)\s*d/i.exec(processingTime)?.[1])
+  return Number.isFinite(days) && days > 0 ? days : 30
+}
+
 @Injectable()
 export class ApplicationsService {
   constructor(private readonly prisma: PrismaService, private readonly engine: WorkflowEngine) {}
@@ -50,6 +60,8 @@ export class ApplicationsService {
         citizenId,
         stage: this.engine.initial,
         statusLabel: this.engine.statusLabel(this.engine.initial),
+        // Right to Services: the department's published processing time.
+        slaDeadline: new Date(Date.now() + charterDays(service.processingTime) * DAY),
         fields: dto.fields as object,
         documents: (dto.documents ?? []) as object,
       },
@@ -171,7 +183,9 @@ export class ApplicationsService {
   }
 
   toDto(app: Application & { remarks?: { by: string; text: string; at: Date }[] }, officer: Officer | null, departmentName?: string) {
-    const slaDays = this.engine.stage(app.stage)?.slaDays ?? null
+    // Days left until the Right to Services deadline; negative once overdue.
+    const open = !this.engine.isTerminal(app.stage)
+    const slaDays = open && app.slaDeadline ? Math.ceil((app.slaDeadline.getTime() - Date.now()) / DAY) : null
     // Synthesize progression dates for visited stages from createdAt.
     const currentIdx = STAGES.findIndex((s) => s.id === app.stage)
     const visited: Record<string, string> = {}
@@ -186,6 +200,8 @@ export class ApplicationsService {
       department: departmentName ?? 'Revenue Department',
       officer: officer ? { name: officer.name, designation: officer.designation, jurisdiction: officer.jurisdiction } : null,
       slaDaysRemaining: slaDays,
+      slaDeadline: app.slaDeadline?.toISOString() ?? null,
+      overdue: slaDays !== null && slaDays < 0,
       createdAt: app.createdAt.toISOString(),
       updatedAt: app.updatedAt.toISOString(),
       timeline: this.engine.buildTimeline(app.stage, visited),

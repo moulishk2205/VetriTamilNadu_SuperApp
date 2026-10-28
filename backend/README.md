@@ -8,7 +8,7 @@ the frontend (no component code changes).
 - **Runtime:** NestJS 10 · TypeScript (strict) · Node 20
 - **Data:** PostgreSQL 16 · Prisma 5 (UUID PKs, soft-delete + `version` on core entities)
 - **Auth:** JWT access + rotating refresh tokens · Passport · bcrypt · role-based access control
-- **Infra:** Redis (queues-ready) · Helmet · rate-limiting · pino structured logs · Swagger
+- **Infra:** Valkey, a BSD-licensed Redis fork (provisioned for queues; not yet used by the API) · Helmet · rate-limiting · pino structured logs · Swagger
 - **Integrations:** pluggable Government Gateway (Aadhaar, DigiLocker, RTO, Revenue, Municipality, Police, Transport, Treasury, Payment, Certificate Authority) — mock adapters today, drop-in live clients later
 
 ---
@@ -22,13 +22,14 @@ cd backend
 [ -f .env ] || printf 'POSTGRES_PASSWORD=%s\nREDIS_PASSWORD=%s\nJWT_ACCESS_SECRET=%s\n' \
   "$(openssl rand -hex 16)" "$(openssl rand -hex 16)" "$(openssl rand -hex 32)" > .env
 # Demo only: fixed OTP + Demo Mode personas, and seed an empty database.
-AUTH_MOCK=true SEED_ON_BOOT=true docker compose up --build   # postgres + redis + backend + web
+AUTH_MOCK=true SEED_ON_BOOT=true docker compose up --build   # postgres + valkey + backend + web
 ```
 
 On boot the backend applies committed migrations (`prisma migrate deploy`). It
 seeds demo data only when `SEED_ON_BOOT=true` **and** the database is empty; a
 failed check stops the boot rather than reseeding. The container runs as the
-unprivileged `node` user. The `web` service builds the portal from the repo
+unprivileged `node` user. Any Docker Engine with the Compose plugin works; no
+Docker Desktop licence is needed (see `docs/LICENCE-REGISTER.md`). The `web` service builds the portal from the repo
 root (`Dockerfile.web`) and serves it with nginx as a non-root user, with
 security headers, gzip and `/api` proxied to the backend on one origin.
 
@@ -39,7 +40,7 @@ security headers, gzip and `/api` proxied to the backend on one origin.
 | Swagger   | http://localhost:4000/api/docs (off in production unless `SWAGGER=true`) |
 | Health    | http://localhost:4000/health (503 when the database is down) |
 
-Postgres and Redis are not published on the host. For local development add the
+Postgres and Valkey (compose service `redis`) are not published on the host. For local development add the
 loopback-only override: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up postgres redis`.
 
 A database first created by the old `prisma db push` boot has no migration
@@ -179,5 +180,5 @@ See [`SEED-FIX.md`](./SEED-FIX.md) for the full root-cause writeup.
   reaches real Prisma logic, and fails only with `P1001 Can't reach database`
   (proving the `ts-node` crash class is gone)
 - `prisma validate` / `prisma generate` — **valid schema**, client generated
-- Full boot with a live Postgres + Redis happens via `docker compose up`; this
+- Full boot with a live Postgres + Valkey happens via `docker compose up`; this
   sandbox has no Docker/Postgres daemon, so that final step runs on your machine.

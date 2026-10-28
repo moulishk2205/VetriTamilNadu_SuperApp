@@ -32,18 +32,19 @@ function lines(label: string): string[] {
  * The running workflow drawn as a BPMN process map, generated from the same
  * definition the engine executes, with today's live count of applications at
  * each stage. "Download BPMN 2.0" exports standard XML that opens in any BPMN
- * modeller (bpmn.io, Camunda Modeler).
+ * modeller (bpmn.io, Camunda Modeler); "Download DMN 1.3" exports the scheme
+ * eligibility rules as decision tables.
  */
 export function ProcessMap() {
   const c = useC()
   const { data, isLoading } = useQuery({ queryKey: ['admin', 'workflow-model'], queryFn: () => apiClient.get('/workflows/gov.standard.v1/model', { schema: ModelSchema }) })
 
-  const download = async () => {
-    const xml = await apiClient.get<string>('/workflows/gov.standard.v1/bpmn')
+  const download = async (path: string, filename: string) => {
+    const xml = await apiClient.get<string>(path)
     const url = URL.createObjectURL(new Blob([xml], { type: 'application/xml' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = 'gov.standard.v1.bpmn'
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -59,10 +60,11 @@ export function ProcessMap() {
         <div style={{ flex: 1, minWidth: 220 }}>
           <p style={{ fontSize: 14, fontWeight: 700, color: c.txt }}>{data.name} · <span className="vtn-num">{data.id}</span></p>
           <p style={{ fontSize: 12, color: c.txt2, marginTop: 2, lineHeight: 1.45 }}>
-            Drawn from the definition the engine runs. Badges show the {live.toLocaleString('en-IN')} applications at each stage right now. Export is standard BPMN 2.0 XML.
+            Drawn from the definition the engine runs. Badges show the {live.toLocaleString('en-IN')} applications at each stage right now. Export is standard BPMN 2.0 XML; the welfare-scheme eligibility rules export as DMN 1.3.
           </p>
         </div>
-        <Btn variant="primary" icon={Download} onClick={() => void download()}>Download BPMN 2.0</Btn>
+        <Btn variant="primary" icon={Download} onClick={() => void download('/workflows/gov.standard.v1/bpmn', 'gov.standard.v1.bpmn')}>Download BPMN 2.0</Btn>
+        <Btn variant="outline" icon={Download} onClick={() => void download('/workflows/eligibility/dmn', 'scheme-eligibility.dmn')}>Download DMN 1.3</Btn>
       </Card>
 
       <Card style={{ marginTop: 10, padding: 0, overflowX: 'auto' }}>

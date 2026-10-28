@@ -28,7 +28,7 @@ const profile = (role: Role) => ({ citizen: db.citizen, role, permissions: permi
 const session = (role: Role) => ({ tokens: mkTokens(role), ...profile(role), session: { id: `sess_${Date.now()}` } })
 
 export const authHandlers = [
-  http.post('/api/auth/otp/request', () => HttpResponse.json({ sent: true, channel: 'sms' })),
+  http.post('/api/auth/otp/request', () => HttpResponse.json({ sent: true, channel: 'sms', demoOtp: '123456' })),
 
   http.post('/api/auth/verify', () => HttpResponse.json(session('citizen'))),
 

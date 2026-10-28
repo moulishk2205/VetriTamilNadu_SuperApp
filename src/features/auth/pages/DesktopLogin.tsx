@@ -6,6 +6,7 @@ import { FieldError, LoginHead, LoginPoster, TrustLine } from '../components/Log
 import { useLoginCopy, useResendTimer } from '../hooks/useLoginUi'
 import { LOGIN_CSS } from '../loginCss'
 import { keepMobileCaret, showMobile, toMobile, type LoginError } from '../loginCopy'
+import { DemoOtpHint } from '../components/DemoOtpHint'
 
 /**
  * Sign-in for the Government Web Portal: the banner poster on the left, a quiet
@@ -115,6 +116,7 @@ export default function DesktopLogin({ onDone }: { onDone: () => void }) {
                 </button>
                 <h1 className="vl-h1">{copy.enterCode}</h1>
                 <p className="vl-lede" id="vl-otp-sent">{copy.sentTo[0]}<b>+91 {showMobile(mobile)}</b>{copy.sentTo[1]}</p>
+                <DemoOtpHint />
 
                 <label className="vl-lab" htmlFor="vl-otp">{copy.codeLabel}</label>
                 <div className="vl-field" data-invalid={error === 'codeInvalid' || error === 'codeRejected'}>

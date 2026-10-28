@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { create } from 'zustand'
 import { apiClient } from '@/lib/api/client'
 import { TokenPairSchema } from '@/types/models/session'
 import { CitizenSchema } from '@/types/models/citizen'
@@ -13,7 +14,11 @@ export interface Credentials {
 
 export type DemoPersona = 'citizen' | 'officer' | 'department' | 'mla' | 'admin'
 
-const RequestOtpResponse = z.object({ sent: z.boolean(), channel: z.string() })
+/** `demoOtp` is present only when the server runs demo sign-in (no SMS is sent). */
+const RequestOtpResponse = z.object({ sent: z.boolean(), channel: z.string(), demoOtp: z.string().optional() })
+
+/** The last demo code the server announced, for the login screens' hint. */
+export const useDemoOtp = create<{ code: string | null }>(() => ({ code: null }))
 
 const ProfileResponse = z.object({
   citizen: CitizenSchema.nullable(),
@@ -35,7 +40,10 @@ export type VerifyResult = z.infer<typeof VerifyResponse>
  */
 export const authApi = {
   requestOtp: (identifier: string, method: string) =>
-    apiClient.post('/auth/otp/request', { identifier, method }, { schema: RequestOtpResponse, auth: false }),
+    apiClient.post('/auth/otp/request', { identifier, method }, { schema: RequestOtpResponse, auth: false }).then((res) => {
+      useDemoOtp.setState({ code: res.demoOtp ?? null })
+      return res
+    }),
 
   verify: (cred: Credentials): Promise<VerifyResult> =>
     apiClient.post('/auth/verify', cred, { schema: VerifyResponse, auth: false }),

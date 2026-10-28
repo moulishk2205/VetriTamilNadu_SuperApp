@@ -12,7 +12,8 @@ export interface Credentials {
   otp?: string
 }
 
-export type DemoPersona = 'citizen' | 'officer' | 'department' | 'mla' | 'admin'
+/** `checker` is a second officer (an RDO) for the two-person approval demo. */
+export type DemoPersona = 'citizen' | 'officer' | 'checker' | 'department' | 'mla' | 'admin'
 
 /** `demoOtp` is present only when the server runs demo sign-in (no SMS is sent). */
 const RequestOtpResponse = z.object({ sent: z.boolean(), channel: z.string(), demoOtp: z.string().optional() })

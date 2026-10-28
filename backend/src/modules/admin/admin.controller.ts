@@ -1,4 +1,5 @@
-import { Controller, Get, Header, Module, NotFoundException, Param, Post } from '@nestjs/common'
+import { Controller, Get, Header, Module, NotFoundException, Param, Post, Query } from '@nestjs/common'
+import { CurrentUser, type JwtUser } from '../../common/decorators/current-user.decorator'
 import { ConfigService } from '@nestjs/config'
 import { ApiTags } from '@nestjs/swagger'
 import { ApplicationStage } from '@prisma/client'
@@ -57,7 +58,8 @@ export class AdminController {
         c('TLS in transit', 'off', 'To be terminated at the State Data Centre gateway; not configured on this host'),
         c('Encryption at rest', 'off', 'Database volume encryption not yet configured'),
         c('SMS OTP delivery (DLT)', 'off', 'Needs a DLT-registered SMS provider'),
-        c('180-day log retention in India (CERT-In 2022)', 'off', 'Retention policy and log shipping not yet in place'),
+        c('180-day log retention in India (CERT-In 2022)', 'warn', 'The app never deletes audit entries and exports them as hash-chained JSON Lines for an India-hosted archive; host log shipping and NTP still to configure'),
+        c('Two-person approval', 'on', 'The officer who recommends a case cannot approve it; a second officer must'),
       ],
     }
   }
@@ -65,6 +67,21 @@ export class AdminController {
   @Get('audit/verify')
   verifyAudit() {
     return this.audit.verify()
+  }
+
+  /**
+   * CERT-In style log hand-over: the audit trail for the last `days` (default
+   * 180) as JSON Lines, hashes included, so an off-site archive or an incident
+   * responder can re-verify the chain. The export is itself audited.
+   */
+  @Get('audit/export')
+  @Header('Content-Type', 'application/x-ndjson; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="vetri-audit.jsonl"')
+  async exportAudit(@CurrentUser() user: JwtUser, @Query('days') days?: string) {
+    const span = Math.min(Math.max(Number(days) || 180, 1), 3650)
+    const rows = await this.prisma.auditLog.findMany({ where: { at: { gte: new Date(Date.now() - span * 86_400_000) } }, orderBy: { seq: 'asc' } })
+    await this.audit.record({ actor: `${user.role}:${user.sub}`, action: 'audit-export', entity: 'audit', entityId: '-', note: `${rows.length} entries, last ${span} days` })
+    return rows.map((r) => JSON.stringify({ seq: r.seq.toString(), at: r.at.toISOString(), actor: r.actor, action: r.action, entity: r.entity, entityId: r.entityId, note: r.note, meta: r.meta, prevHash: r.prevHash, hash: r.hash })).join('\n') + '\n'
   }
 
   @Post('sla/sweep')

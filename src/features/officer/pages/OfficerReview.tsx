@@ -150,7 +150,7 @@ export default function OfficerReview() {
                 </div>
               </Card>
             ))}
-            {act.isError && <p style={{ fontSize: 12, color: c.err, textAlign: 'center', marginTop: 6 }}>Action not permitted from the current stage.</p>}
+            {act.isError && <p role="alert" style={{ fontSize: 12.5, color: c.err, textAlign: 'center', marginTop: 6 }}>{act.error?.message || 'Action not permitted from the current stage.'}</p>}
           </>
         )}
         {terminal && (

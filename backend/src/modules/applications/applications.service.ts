@@ -93,7 +93,12 @@ export class ApplicationsService {
   officerScope(officer: Officer): Prisma.ApplicationWhereInput {
     return {
       deletedAt: null,
-      OR: [{ officerId: officer.id }, { officerId: null, citizen: { district: officer.district } }],
+      OR: [
+        { officerId: officer.id },
+        { officerId: null, citizen: { district: officer.district } },
+        // Checker duty: cases awaiting approval in the officer's own district and department.
+        { stage: ApplicationStage.approval, departmentId: officer.departmentId, citizen: { district: officer.district } },
+      ],
     }
   }
 
@@ -133,6 +138,13 @@ export class ApplicationsService {
 
   private async applyTransition(app: Application, to: ApplicationStage, actingOfficer: Officer): Promise<Application> {
     const data: Record<string, unknown> = { stage: to, statusLabel: this.engine.statusLabel(to) }
+
+    // Maker-checker: whoever recommends a case into approval is its maker, and
+    // the maker cannot also approve it; a second officer must.
+    if (to === ApplicationStage.approval) data.makerOfficerId = actingOfficer.id
+    if (app.stage === ApplicationStage.approval && to !== ApplicationStage.rejected && app.makerOfficerId === actingOfficer.id) {
+      throw new ForbiddenException('Two-person rule: you recommended this case, so a different officer must approve it.')
+    }
 
     // The officer who moves an unassigned application into assignment takes it.
     if (to === ApplicationStage.officerAssigned && !app.officerId) {

@@ -346,6 +346,9 @@ model Application {
   slaDeadline    DateTime?
   /// When the Right to Services deadline was first found breached (once per application).
   slaBreachedAt  DateTime?
+  /// Maker-checker: the officer who recommended the case into approval. That
+  /// officer cannot also approve it.
+  makerOfficerId String?
   fields         Json             @default("{}")
   documents      Json             @default("[]")
   timeline       TimelineEvent[]

@@ -1,8 +1,9 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Module, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common'
-import { IsBoolean, IsEnum, IsOptional } from 'class-validator'
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Module, NotFoundException, Param, Patch, Post, Put, Query } from '@nestjs/common'
+import { IsArray, IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator'
 import { CurrentUser, type JwtUser } from '../../common/decorators/current-user.decorator'
 import { ConfigService } from '@nestjs/config'
 import { ApiTags } from '@nestjs/swagger'
+import { PermissionService, Permissions } from '../auth/permissions'
 import { ApplicationStage, Role } from '@prisma/client'
 import { AuditService } from '../../common/audit/audit.service'
 import { Roles } from '../../common/decorators/roles.decorator'
@@ -15,6 +16,10 @@ const OPEN = { notIn: [ApplicationStage.completed, ApplicationStage.rejected] }
 type ControlStatus = 'on' | 'warn' | 'off'
 
 /** Declared before the controller: decorator metadata reads it at class definition. */
+class RolePermissionsDto {
+  @IsArray() @IsString({ each: true }) permissions!: string[]
+}
+
 class UpdateUserDto {
   @IsOptional() @IsEnum(Role) role?: Role
   @IsOptional() @IsBoolean() active?: boolean
@@ -23,6 +28,7 @@ class UpdateUserDto {
 /** Trust Center: the platform's security posture, from live state, including what is not done yet. */
 @ApiTags('admin')
 @Roles('ADMIN')
+@Permissions('admin:manage')
 @Controller('admin')
 export class AdminController {
   constructor(
@@ -30,6 +36,7 @@ export class AdminController {
     private readonly audit: AuditService,
     private readonly sla: SlaService,
     private readonly config: ConfigService,
+    private readonly perms: PermissionService,
   ) {}
 
   @Get('trust')
@@ -94,6 +101,24 @@ export class AdminController {
   @Post('sla/sweep')
   sweep() {
     return this.sla.sweep()
+  }
+
+  /** The live role → permission matrix and the catalog of permissions. */
+  @Get('permissions')
+  permissions() {
+    return this.perms.matrix()
+  }
+
+  /** Replace one role's permissions. Takes effect on the next request; audited. */
+  @Put('permissions/:role')
+  async setPermissions(@CurrentUser() me: JwtUser, @Param('role') role: string, @Body() dto: RolePermissionsDto) {
+    if (!(Object.values(Role) as string[]).includes(role)) throw new NotFoundException('Unknown role')
+    const before = await this.perms.forRole(role)
+    const after = await this.perms.set(role as Role, dto.permissions)
+    const added = after.filter((k) => !before.includes(k))
+    const removed = before.filter((k) => !after.includes(k))
+    await this.audit.record({ actor: `${me.role}:${me.sub}`, action: 'permissions-update', entity: 'role', entityId: role, note: `+[${added.join(', ')}] -[${removed.join(', ')}]` })
+    return { role, permissions: after }
   }
 
   /** Accounts with their role, status and last sign-in (newest activity first). */

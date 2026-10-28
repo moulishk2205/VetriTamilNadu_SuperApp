@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
+import { Permissions } from '../auth/permissions'
 import { IsOptional, IsString } from 'class-validator'
 import { CurrentUser, type JwtUser } from '../../common/decorators/current-user.decorator'
 import { Roles } from '../../common/decorators/roles.decorator'
@@ -13,6 +14,7 @@ class OfficerActionDto {
 @ApiTags('officer')
 /** Queue, stats and actions are scoped to the signed-in officer's jurisdiction. */
 @Roles('OFFICER')
+@Permissions('application:process')
 @Controller()
 export class OfficerController {
   constructor(private readonly officer: OfficerService) {}
@@ -27,6 +29,7 @@ export class OfficerController {
   }
 
   @Roles('ADMIN', 'DEPARTMENT')
+  @Permissions()
   @Get('admin/audit')
   audit() { return this.officer.auditTrail() }
 }

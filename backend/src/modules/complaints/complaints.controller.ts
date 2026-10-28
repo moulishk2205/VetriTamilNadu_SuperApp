@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Module, Param, Post } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
+import { Permissions } from '../auth/permissions'
 import { IsOptional, IsString, MaxLength } from 'class-validator'
 import { CurrentCitizenId, CurrentUser, type JwtUser } from '../../common/decorators/current-user.decorator'
 import { Roles } from '../../common/decorators/roles.decorator'
@@ -23,6 +24,7 @@ export class ComplaintsController {
     return this.complaints.list(citizenId)
   }
 
+  @Permissions('complaint:create')
   @Post()
   create(@CurrentCitizenId() citizenId: string, @Body() dto: CreateComplaintDto) {
     return this.complaints.create(citizenId, dto)
@@ -32,6 +34,7 @@ export class ComplaintsController {
 /** Grievance redressal for officers, scoped to their district. */
 @ApiTags('officer')
 @Roles('OFFICER')
+@Permissions('complaint:resolve')
 @Controller('officer/grievances')
 export class OfficerGrievancesController {
   constructor(private readonly complaints: ComplaintsService, private readonly apps: ApplicationsService) {}

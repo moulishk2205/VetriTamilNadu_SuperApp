@@ -96,7 +96,7 @@ async function main() {
   await prisma.$transaction([
     prisma.aiMessage.deleteMany(), prisma.conversation.deleteMany(), prisma.payment.deleteMany(),
     prisma.attachment.deleteMany(), prisma.comment.deleteMany(), prisma.timelineEvent.deleteMany(),
-    prisma.application.deleteMany(), prisma.complaint.deleteMany(), prisma.notification.deleteMany(),
+    prisma.reportRequest.deleteMany(), prisma.application.deleteMany(), prisma.complaint.deleteMany(), prisma.notification.deleteMany(),
     prisma.document.deleteMany(), prisma.address.deleteMany(), prisma.eligibilityRule.deleteMany(),
     prisma.scheme.deleteMany(), prisma.auditLog.deleteMany(), prisma.session.deleteMany(),
     prisma.refreshToken.deleteMany(), prisma.otp.deleteMany(), prisma.workflowStep.deleteMany(),

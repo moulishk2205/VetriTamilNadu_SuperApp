@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CheckCircle, XCircle, FileText, AlertTriangle, Users, User, PenLine, Wallet } from 'lucide-react'
+import { CheckCircle, XCircle, FileText, AlertTriangle, Users, User, PenLine, Wallet, Undo2 } from 'lucide-react'
+import { CaseCollaboration } from '../components/CaseCollaboration'
 import { StatusBar, Header, Card, Btn } from '@/components/ui'
 import { useC } from '@/hooks/useUi'
 import { presentTimeline } from '@/features/applications/timeline'
@@ -47,6 +48,7 @@ export default function OfficerReview() {
     { a: 'correction', l: 'Request Correction', icon: FileText, tone: c.info, desc: 'Return to citizen for additional documents' },
     { a: 'escalate', l: 'Escalate', icon: AlertTriangle, tone: c.warn, desc: `Escalate to ${meta?.authorities.escalation ?? 'senior officer'}` },
     { a: 'transfer', l: 'Transfer', icon: Users, tone: c.info, desc: 'Reassign to another officer' },
+    { a: 'return', l: 'Return to previous step', icon: Undo2, tone: c.info, desc: 'Send back one stage for another review (e.g. approval → remarks)' },
     { a: 'reject', l: 'Reject', icon: XCircle, tone: c.err, desc: 'Record reason and close the application' },
   ]
 
@@ -153,6 +155,7 @@ export default function OfficerReview() {
             {act.isError && <p role="alert" style={{ fontSize: 12.5, color: c.err, textAlign: 'center', marginTop: 6 }}>{act.error?.message || 'Action not permitted from the current stage.'}</p>}
           </>
         )}
+        <CaseCollaboration appId={app.id} closed={terminal} />
         {terminal && (
           <Card style={{ background: `${tone}08`, border: `1px solid ${tone}20` }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: c.txt }}>

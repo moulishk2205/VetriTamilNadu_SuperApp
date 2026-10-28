@@ -24,7 +24,7 @@ const StatsSchema = z.object({
 })
 export type OfficerStats = z.infer<typeof StatsSchema>
 
-export type OfficerAction = 'approve' | 'reject' | 'correction' | 'escalate' | 'transfer'
+export type OfficerAction = 'approve' | 'reject' | 'correction' | 'escalate' | 'transfer' | 'return'
 
 export const officerApi = {
   queue: (): Promise<OfficerQueue> => apiClient.get('/officer/queue', { schema: QueueSchema }),

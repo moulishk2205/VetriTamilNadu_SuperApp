@@ -253,31 +253,62 @@ async function main() {
     { ref: 'APP-2026-CC-44655', slug: 'svc_community', name: 'Community Certificate', stage: ApplicationStage.approval },
     { ref: 'APP-2026-BC-1123', slug: 'svc_birth', name: 'Birth Certificate', stage: ApplicationStage.completed },
   ]
+  // Right to Services timing: deadline = filing date + the published processing
+  // time; decided applications finish within (or, sometimes, after) it. Breaches
+  // that predate the seed are pre-flagged so the first SLA sweep only acts on
+  // new ones.
+  const charter = (slug: string) => {
+    const t = SERVICES.find((s) => s.slug === slug)?.time ?? '30d'
+    return /same day/i.test(t) ? 1 : Number(/(\d+)/.exec(t)?.[1] ?? 30)
+  }
+  const timing = (slug: string, stage: ApplicationStage, createdAt: Date, i: number) => {
+    const days = charter(slug)
+    const slaDeadline = new Date(createdAt.getTime() + days * 86_400_000)
+    const terminal = stage === ApplicationStage.completed || stage === ApplicationStage.rejected
+    // ~85% of decided applications finish on time.
+    const took = Math.max(1, Math.round(days * (i % 7 === 0 ? 1.4 : 0.35 + (i % 5) * 0.12)))
+    const updatedAt = terminal ? new Date(Math.min(Date.now(), createdAt.getTime() + took * 86_400_000)) : undefined
+    const slaBreachedAt = !terminal && slaDeadline.getTime() < Date.now() ? slaDeadline : undefined
+    return { slaDeadline, updatedAt, slaBreachedAt }
+  }
+
   for (const a of demoApps) {
+    const createdAt = daysAgo(10)
     await prisma.application.create({
       data: {
         referenceNo: a.ref, serviceSlug: a.slug, serviceName: a.name, citizenId: demo.id, stage: a.stage,
         statusLabel: a.stage === ApplicationStage.completed ? 'Completed' : 'In Progress',
         officerId: officers[0].id, departmentId: departments[0].id, certIssued: a.stage === ApplicationStage.completed,
-        createdAt: daysAgo(10),
+        createdAt, ...timing(a.slug, a.stage, createdAt, 1),
       },
     })
   }
+  // Demo moment: one application a day past its deadline and not yet flagged.
+  // "Run SLA check" in the Trust Center escalates it and notifies the citizen.
+  const lateCreated = daysAgo(16)
+  await prisma.application.create({
+    data: {
+      referenceNo: 'APP-2026-RES-44800', serviceSlug: 'svc_residence', serviceName: 'Residence Certificate', citizenId: demo.id,
+      stage: ApplicationStage.inspection, statusLabel: 'In Progress', officerId: officers[0].id, departmentId: departments[0].id,
+      createdAt: lateCreated, slaDeadline: new Date(lateCreated.getTime() + 15 * 86_400_000),
+    },
+  })
   let appSeq = 44822
-  for (let i = 0; i < 497; i++) {
+  for (let i = 0; i < 496; i++) {
     const svc = pick(SERVICES, i)
     const stage = pick(STAGES, i * 7)
     const cid = pick(citizenIds, i + 1)
+    const createdAt = daysAgo(rand(60))
     await prisma.application.create({
       data: {
         referenceNo: `APP-2026-${svc.code.split('-')[1]}-${appSeq++}`, serviceSlug: svc.slug, serviceName: svc.name,
         citizenId: cid, stage, statusLabel: stage === 'completed' ? 'Completed' : stage === 'rejected' ? 'Rejected' : 'In Progress',
         officerId: pick(officers, i).id, departmentId: pick(departments, i).id,
-        certIssued: ['walletDelivery', 'notified', 'completed'].includes(stage), createdAt: daysAgo(rand(60)),
+        certIssued: ['walletDelivery', 'notified', 'completed'].includes(stage), createdAt, ...timing(svc.slug, stage, createdAt, i),
       },
     })
   }
-  console.log('  ✓ 500 applications')
+  console.log('  ✓ 500 applications (with Right to Services deadlines)')
 
   /* complaints ------------------------------------------------------------ */
   await prisma.complaint.create({

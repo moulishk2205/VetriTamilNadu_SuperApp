@@ -18,7 +18,7 @@ const StatsSchema = z.object({
   completedThisMonth: z.number(),
   avgProcessingDays: z.number(),
   approvalRate: z.number(),
-  citizenRating: z.number(),
+  citizenRating: z.number().nullable(),
   slaCompliance: z.number(),
   departmentRank: z.number(),
 })

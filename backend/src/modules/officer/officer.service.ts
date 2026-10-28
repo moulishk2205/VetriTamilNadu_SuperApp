@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { ApplicationStage, Officer, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import type { JwtUser } from '../../common/decorators/current-user.decorator'
+import { AuditService } from '../../common/audit/audit.service'
 import { ApplicationsService } from '../applications/applications.service'
 import { WorkflowEngine } from '../workflow/workflow.engine'
 
@@ -15,6 +16,7 @@ export class OfficerService {
     private readonly prisma: PrismaService,
     private readonly apps: ApplicationsService,
     private readonly engine: WorkflowEngine,
+    private readonly audit: AuditService,
   ) {}
 
   /** One application in the officer's jurisdiction, for the review screen. */
@@ -38,20 +40,40 @@ export class OfficerService {
     return { officer: this.officerDto(officer), items, total: items.length }
   }
 
+  /** Every figure is computed from the database. Citizen rating is null: no
+   *  feedback is collected yet, and a number would be invented. */
   async stats(user: JwtUser) {
-    const scope = this.apps.officerScope(await this.apps.officerFor(user))
+    const officer = await this.apps.officerFor(user)
+    const scope = this.apps.officerScope(officer)
     const count = (where: Prisma.ApplicationWhereInput) => this.prisma.application.count({ where: { AND: [scope, where] } })
-    const [pending, escalated, corrections, dueToday, highPriority] = await Promise.all([
+    const tomorrow = new Date(Date.now() + 86_400_000)
+    const monthAgo = new Date(Date.now() - 30 * 86_400_000)
+    const [pending, escalated, corrections, dueToday, highPriority, completedThisMonth] = await Promise.all([
       count({ stage: NON_TERMINAL }),
       count({ stage: ApplicationStage.escalation }),
       count({ stage: ApplicationStage.correctionRequested }),
-      count({ stage: { in: [ApplicationStage.approval, ApplicationStage.inspection] } }),
+      count({ stage: NON_TERMINAL, slaDeadline: { lte: tomorrow } }),
       count({ serviceSlug: { in: ['svc_income', 'svc_community'] }, stage: NON_TERMINAL }),
+      this.prisma.application.count({ where: { officerId: officer.id, stage: ApplicationStage.completed, updatedAt: { gte: monthAgo } } }),
     ])
+    const [perf] = await this.prisma.$queryRaw<{ completed: number; rejected: number; avg_days: number | null; on_time: number }[]>`
+      SELECT count(*) FILTER (WHERE stage = 'completed')::int AS completed,
+             count(*) FILTER (WHERE stage = 'rejected')::int AS rejected,
+             avg(EXTRACT(EPOCH FROM ("updatedAt" - "createdAt")) / 86400) FILTER (WHERE stage = 'completed')::float AS avg_days,
+             count(*) FILTER (WHERE stage = 'completed' AND "slaDeadline" IS NOT NULL AND "updatedAt" <= "slaDeadline")::int AS on_time
+      FROM "Application" WHERE "officerId" = ${officer.id} AND "deletedAt" IS NULL`
+    const ranks = await this.prisma.$queryRaw<{ officerId: string; rank: number }[]>`
+      SELECT o.id AS "officerId", rank() OVER (ORDER BY count(a.id) DESC)::int AS rank
+      FROM "Officer" o LEFT JOIN "Application" a ON a."officerId" = o.id AND a.stage = 'completed'
+      WHERE o."departmentId" = ${officer.departmentId} GROUP BY o.id`
+    const decided = perf.completed + perf.rejected
     return {
-      pending, dueToday, highPriority, escalated, corrections,
-      completedThisMonth: 47, avgProcessingDays: 4.2, approvalRate: 92,
-      citizenRating: 4.6, slaCompliance: 96, departmentRank: 3,
+      pending, dueToday, highPriority, escalated, corrections, completedThisMonth,
+      avgProcessingDays: Math.round((perf.avg_days ?? 0) * 10) / 10,
+      approvalRate: decided ? Math.round((perf.completed / decided) * 100) : 0,
+      citizenRating: null,
+      slaCompliance: perf.completed ? Math.round((perf.on_time / perf.completed) * 100) : 0,
+      departmentRank: ranks.find((r) => r.officerId === officer.id)?.rank ?? 0,
     }
   }
 
@@ -129,7 +151,7 @@ export class OfficerService {
   }
 
   private async writeAudit(actor: string, action: string, entityId: string, note?: string) {
-    await this.prisma.auditLog.create({ data: { actor, action, entity: 'application', entityId, note } })
+    await this.audit.record({ actor, action, entity: 'application', entityId, note })
   }
 
   private async notify(citizenId: string, title: string, body: string, actionPath: string, icon: string, color: string, category: 'application') {

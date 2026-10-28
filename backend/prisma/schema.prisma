@@ -344,6 +344,8 @@ model Application {
   officer        Officer?         @relation(fields: [officerId], references: [id])
   officerId      String?
   slaDeadline    DateTime?
+  /// When the Right to Services deadline was first found breached (once per application).
+  slaBreachedAt  DateTime?
   fields         Json             @default("{}")
   documents      Json             @default("[]")
   timeline       TimelineEvent[]
@@ -530,6 +532,12 @@ model AiMessage {
 // ─── Platform ────────────────────────────────────────────────────────────────────
 model AuditLog {
   id        String   @id @default(uuid())
+  /// Append order of the hash chain.
+  seq       BigInt   @unique @default(autoincrement())
+  /// SHA-256 chain: hash = sha256(prevHash + row content). Null only for rows
+  /// written before the chain existed.
+  prevHash  String?
+  hash      String?
   actor     String
   action    String
   entity    String

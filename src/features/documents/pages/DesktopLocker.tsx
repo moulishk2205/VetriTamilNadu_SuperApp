@@ -4,6 +4,7 @@ import { useC } from '@/hooks/useUi'
 import { useAppNavigation } from '@/hooks/useAppNavigation'
 import { PageHeader, Toolbar, Panel, EmptyState, LoadingRows, DeskBtn, StatusChip, Toast } from '@/app/desktop/DesktopUI'
 import { useDocumentsQuery, useWalletDocumentCards } from '@/features/documents/hooks/useDocuments'
+import { CertificateQr } from '@/features/documents/components/CertificateQr'
 
 /**
  * Desktop digital locker — a file-explorer view of the citizen's verified
@@ -183,6 +184,7 @@ export default function DesktopLocker() {
                     <p className="vtn-num" style={{ fontSize: 12.5, color: c.txt2, marginTop: 6 }}>{active.id}</p>
                     <p style={{ fontSize: 12, color: c.txt2, marginTop: 18 }}>{active.h}</p>
                     <StatusChip label={`Valid: ${active.v}`} tone="ok" />
+                    <CertificateQr number={active.id} sig={active.sig} />
                   </div>
 
                   {/* Metadata + actions */}

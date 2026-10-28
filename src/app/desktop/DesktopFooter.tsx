@@ -44,7 +44,7 @@ export function DesktopFooter() {
       </div>
 
       <div className="vh-foot-strip">
-        <span>© {new Date().getFullYear()} Government of Tamil Nadu. All rights reserved.</span>
+        <span>VETRI · prototype for the e-Sevai 2.0 programme · not an official Government service</span>
         <span>Designed and maintained for the citizens of Tamil Nadu · e-Sevai</span>
       </div>
     </footer>

@@ -21,6 +21,8 @@ export interface DocumentCard {
   icon: ServiceLook['Icon']
   h: string
   dob?: string
+  /** Signature for the public verification link behind the certificate QR. */
+  sig?: string
 }
 
 export function useWalletDocumentCards(): DocumentCard[] {
@@ -28,7 +30,7 @@ export function useWalletDocumentCards(): DocumentCard[] {
   return useMemo(
     () => (data ?? []).map((d) => {
       const look = documentLook(d.name)
-      return { n: d.name, id: d.number, v: d.validity, tp: d.type, cl: look?.colour ?? d.color, icon: look?.Icon ?? FileText, h: d.holderName, dob: d.dob }
+      return { n: d.name, id: d.number, v: d.validity, tp: d.type, cl: look?.colour ?? d.color, icon: look?.Icon ?? FileText, h: d.holderName, dob: d.dob, sig: d.verifySig }
     }),
     [data],
   )

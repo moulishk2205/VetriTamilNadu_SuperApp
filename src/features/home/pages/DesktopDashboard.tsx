@@ -135,7 +135,7 @@ export default function DesktopDashboard() {
           <div className="vh-stats">
             <p><b>{done}<i>%</i></b><small>applications completed</small></p>
             <p><b>{area.stats.avgResolutionDays}<i> days</i></b><small>average to decide</small></p>
-            <p><b>{area.stats.satisfaction}<i> / 5</i></b><small>citizen rating</small></p>
+            <p><b>{area.stats.pending}</b><small>still in progress</small></p>
           </div>
           {issues.length > 0 && (
             <p style={{ padding: '.75em 1.125em 0', fontSize: '.875em', color: 'var(--ink2)' }}>

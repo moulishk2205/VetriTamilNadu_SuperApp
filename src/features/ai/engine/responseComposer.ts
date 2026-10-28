@@ -134,7 +134,7 @@ export function compose(intent: IntentFrame, ctx: CitizenContext, results: ToolR
         : apps
       if (!wanted.length) parts.push('You have no applications yet — start one from Services and I will track it for you.')
       for (const a of wanted.slice(0, 3)) {
-        parts.push(`${a.serviceName} ${a.referenceNo}: ${a.status}${a.slaDaysRemaining != null ? ` · ${a.slaDaysRemaining} day(s) left at this stage (auto-escalates to the RDO if breached)` : ''}.`)
+        parts.push(`${a.serviceName} ${a.referenceNo}: ${a.status}${a.slaDaysRemaining == null ? '' : a.slaDaysRemaining < 0 ? ` · overdue by ${-a.slaDaysRemaining} day(s) under the Right to Services charter (escalated)` : ` · ${a.slaDaysRemaining} day(s) left under the Right to Services charter (escalates automatically if missed)`}.`)
       }
       actions.push(card('Open Tracker', 'tracker', 'track'))
       break

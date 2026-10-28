@@ -64,6 +64,7 @@ services:
       AUTH_MOCK: ${AUTH_MOCK:-false}
       SEED_ON_BOOT: ${SEED_ON_BOOT:-false}
       SWAGGER: ${SWAGGER:-false}
+      SLA_SWEEP_MINUTES: ${SLA_SWEEP_MINUTES:-15}
       TRUST_PROXY: ${TRUST_PROXY:-}
     ports:
       - '4000:4000'

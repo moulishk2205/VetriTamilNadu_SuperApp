@@ -4,7 +4,7 @@ import { Roles } from '../../common/decorators/roles.decorator'
 import { AnalyticsService } from './analytics.service'
 
 @ApiTags('analytics')
-@Roles('OFFICER', 'DEPARTMENT', 'MLA', 'ADMIN')
+@Roles('CITIZEN', 'OFFICER', 'DEPARTMENT', 'MLA', 'ADMIN')
 @Controller('analytics')
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}

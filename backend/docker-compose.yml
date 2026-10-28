@@ -27,15 +27,19 @@ services:
       timeout: 5s
       retries: 10
 
+  # Valkey (BSD-3-Clause), the Linux Foundation fork of Redis: same protocol,
+  # no source-available licence (Redis 7.4+ is RSALv2/SSPLv1). The service keeps
+  # the name `redis` so REDIS_HOST and client libraries work unchanged.
   redis:
-    image: redis:7-alpine
+    image: valkey/valkey:8.1-alpine
     container_name: vetri-redis
     restart: unless-stopped
-    command: ['redis-server', '--requirepass', '${REDIS_PASSWORD:?set REDIS_PASSWORD}']
+    command: ['valkey-server', '--requirepass', '${REDIS_PASSWORD:?set REDIS_PASSWORD}']
     environment:
       REDISCLI_AUTH: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      # valkey-cli exits 0 even on an auth error, so require an actual PONG.
+      test: ['CMD-SHELL', 'valkey-cli ping | grep -q PONG']
       interval: 5s
       timeout: 3s
       retries: 10

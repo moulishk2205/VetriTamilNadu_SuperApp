@@ -30,9 +30,12 @@ Backend (backend/package.json)
 
 Runtime services (docker-compose)
   PostgreSQL 16 .................. PostgreSQL Licence (permissive)
-  Redis 7 ........................ Redis 7.4+ is RSALv2/SSPL, not open source.
-                                   Pin redis:7.2 (BSD-3) or move to Valkey (BSD-3)
-                                   before any Government deployment.
+  Valkey 8.1 ..................... BSD-3-Clause (replaces Redis, whose 7.4+
+                                   releases are RSALv2/SSPL)
+  nginx 1.27 (web portal image) .. BSD-2-Clause
+
+The full component list, with licences, is the SBOM in docs/sbom/; see
+docs/LICENCE-REGISTER.md.
 
 Fonts (self-hosted in public/fonts, served from our own origin)
   Inter .......................... SIL Open Font License 1.1 (The Inter Project Authors)

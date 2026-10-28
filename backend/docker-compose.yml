@@ -7,7 +7,7 @@
 #   AUTH_MOCK=true      fixed OTP 123456 + Demo Mode personas
 #   SEED_ON_BOOT=true   seed demo data when the database is empty
 #
-# Only the API (4000) is published. Postgres and Redis are reachable only on the
+# Published: the web portal (8080) and the API (4000). Postgres and Redis are reachable only on the
 # compose network. For local development from the host, add the loopback-only
 # override: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 services:
@@ -74,6 +74,28 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+
+  # Web portal: the built SPA served by nginx as a non-root user on 8080, with
+  # /api proxied to the backend so the browser talks to a single origin.
+  # nginx forwards X-Forwarded-For; to rate-limit per visitor rather than per
+  # proxy, set TRUST_PROXY=1 and stop publishing 4000 so clients cannot reach
+  # the API directly with a forged header.
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile.web
+    container_name: vetri-web
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - '8080:8080'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   vetri-pgdata:

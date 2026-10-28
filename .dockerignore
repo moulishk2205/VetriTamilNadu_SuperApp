@@ -1,0 +1,9 @@
+node_modules
+dist
+backend
+docs
+motion-studio
+# Hidden files and folders: version control, local editor and tool folders, .env files
+.*
+*.log
+tree.txt

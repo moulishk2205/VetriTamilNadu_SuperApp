@@ -131,9 +131,10 @@ Standard list envelope: `{ items, total, page, pageSize }`. Errors normalize to
 
 ## 5. Workflow Engine Overview
 
-`lib/workflow` — workflows are **data, not code**. Any service declares a
-`WorkflowDefinition` (ordered `stages` + `transitions` adjacency list); the pure
-engine drives every instance. Nothing is hardcoded per service.
+`lib/workflow` — any service declares a typed `WorkflowDefinition` (ordered
+`stages` + `transitions` adjacency list) and the pure engine drives every
+instance, so nothing is hardcoded per service. Definitions are TypeScript, not
+admin-editable data; an editable BPMN/DMN engine is future work.
 
 Standard government pipeline (`gov.standard.v1`):
 

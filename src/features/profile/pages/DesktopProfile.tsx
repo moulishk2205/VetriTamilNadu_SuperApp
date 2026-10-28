@@ -176,15 +176,16 @@ export default function DesktopProfile({ initialTab = 'personal' }: { initialTab
               <Panel title="Security">
                 <Row k="Authentication" v="Mobile OTP (Aadhaar-linked)" />
                 <Row k="Verification" v={(citizen?.verifiedVia ?? []).join(' + ') || 'Unverified'} />
-                <Row k="Session" v="Encrypted · auto-refreshing token" />
+                <Row k="Session" v="Ends at sign-out · token checked on every request" />
                 <div style={{ marginTop: 16 }}>
                   <DeskBtn onClick={() => onNav('security')} icon={Shield}>Open security settings</DeskBtn>
                 </div>
               </Panel>
               <Panel title="Privacy">
                 <p style={{ fontSize: 13, color: c.txt2, lineHeight: 1.7 }}>
-                  Vetri never stores your Aadhaar number or one-time passwords. Documents in your locker are issued and signed by the originating
-                  government department and are shared only when you explicitly authorise it.
+                  Vetri never stores your Aadhaar number: only the last four digits are shown, and sign-in codes are kept as a one-way hash for five
+                  minutes. Certificates in your locker carry a Vetri signature that anyone can check with the QR code. Vetri does not share your
+                  documents with other departments; consent-based sharing is not built yet.
                 </p>
               </Panel>
             </>

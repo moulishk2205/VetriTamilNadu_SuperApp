@@ -68,7 +68,7 @@ The assistant is a **Government Operating Assistant**, not a chatbot:
 | Document assistant | ✅ grounded in the Wallet (quotes real document numbers) |
 | Application assistant | ✅ live status, officer, RTS-deadline explanations |
 | Scheme advisor | ✅ eligibility + match % + required documents |
-| Tamil + English + mixed | ✅ every reply bilingual |
+| Tamil + English + mixed | Partly: Tamil and mixed input understood; live replies are English |
 | Voice in / voice out | ✅ Web Speech API (`useVoice`), ta-IN/en-IN, graceful degradation |
 | Conversation memory | ✅ persisted across sessions (`aiStore`) |
 | Tool calling / navigation | ✅ every reply carries deep-link actions through the app router |
@@ -95,10 +95,10 @@ demand, satisfaction, demographics, ward comparisons, exportable via print.
 
 - **AuthN/Z**: OTP/biometric → JWT + refresh rotation → RBAC roles
   (citizen/officer/department/mla/admin) → permission-guarded routes.
-- **Hardening**: ErrorBoundary, offline banner + **offline queue** (persisted
-  replay, `offlineQueueStore`), retry w/ backoff, 401-refresh-retry, Zod at
-  every boundary, structured logging + ring buffer, **audit trail**,
-  **secureStorage** encryption-at-rest seam, **feature flags**, health checks.
+- **Hardening**: ErrorBoundary, offline banner, retry w/ backoff,
+  401-refresh-retry, Zod at every boundary, structured logging + ring buffer,
+  **audit trail**, **feature flags**, health checks. (An `offlineQueueStore`
+  exists but nothing replays it yet; there is no encryption at rest.)
 - **Performance**: 75 code-split chunks, lazy routes, query caching.
 - **Quality gate**: `tsc` 0 errors · `eslint` 0 errors · build green ·
   **zero console errors** across the full multi-portal walkthrough · UI parity

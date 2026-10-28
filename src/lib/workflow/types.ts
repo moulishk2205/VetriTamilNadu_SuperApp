@@ -1,9 +1,10 @@
 /**
  * Government Workflow Engine — types.
  *
- * A workflow is data, not code: any government service (certificate, licence,
- * complaint, transfer) declares a `WorkflowDefinition` and the engine drives it.
- * No stage logic is hardcoded per service.
+ * Any government service (certificate, licence, complaint, transfer) declares a
+ * typed `WorkflowDefinition` and the engine drives it, so no stage logic is
+ * hardcoded per service. Definitions are TypeScript today (not admin-editable
+ * data); the backend exports the running one as BPMN 2.0.
  */
 
 export type WorkflowActor = 'citizen' | 'system' | 'officer' | 'department' | 'signatory'

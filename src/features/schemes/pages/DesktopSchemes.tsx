@@ -52,7 +52,7 @@ export default function DesktopSchemes() {
     <>
       <PageHeader
         title="Welfare Schemes"
-        subtitle={`Government of Tamil Nadu schemes ranked against ${citizen?.fullName ? `${citizen.fullName}’s` : 'your'} citizen profile — district, income band and verified documents.`}
+        subtitle={`Government of Tamil Nadu schemes ranked against ${citizen?.fullName ? `${citizen.fullName}’s` : 'your'} citizen profile — district, income band and verified documents. Scheme details and budgets are illustrative until verified against the Government Order.`}
         actions={compare.length > 0 ? <DeskBtn icon={Scale} onClick={() => setCompare([])}>Clear comparison ({compare.length})</DeskBtn> : undefined}
       />
 

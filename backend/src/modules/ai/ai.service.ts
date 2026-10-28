@@ -5,11 +5,11 @@ import { PrismaService } from '../../prisma/prisma.service'
 const TERMINAL: ApplicationStage[] = [ApplicationStage.completed, ApplicationStage.rejected]
 
 /**
- * Ask Vetri — the Government AI Operating System, server-side. A genuine
- * intent → context → plan → tools → compose pipeline over live platform state.
- * Replies are computed from the citizen's real data + the service/scheme
- * knowledge graph; there is no canned-reply switch. An LLM later swaps in
- * behind this exact contract.
+ * Ask Vetri, server-side: a rule-based assistant (keyword intent matching,
+ * not a language model). Intent → context → plan → tools → compose runs over
+ * live platform state, so replies quote the citizen's real data. Replies are
+ * English. An on-premise LLM can later replace the intent and compose steps
+ * behind this same contract.
  */
 
 export interface AiAction { label: string; screen: string; kind?: 'apply' | 'track' | 'wallet' | 'pay' | 'view' }

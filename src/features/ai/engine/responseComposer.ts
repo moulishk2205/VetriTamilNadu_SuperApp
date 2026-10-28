@@ -5,10 +5,10 @@ import type { CoverageResult, Prediction } from './toolExecutor'
 import type { AppSnapshot, WalletDocSnapshot } from './types'
 
 /**
- * Response Composer — turns the executed plan into a bilingual reply + action
- * cards. Every sentence is assembled from tool outputs and graph knowledge;
- * there are no canned per-intent paragraphs. (This is the surface a real LLM
- * will later generate from the same structured inputs.)
+ * Response Composer — turns the executed plan into a reply + action cards
+ * using sentence templates filled from tool outputs and graph knowledge. It is
+ * rule-based, not a language model; a real LLM could later generate from the
+ * same structured inputs.
  */
 
 const card = (label: string, screen: string, kind?: ActionCard['kind']): ActionCard => ({ label, screen, kind })

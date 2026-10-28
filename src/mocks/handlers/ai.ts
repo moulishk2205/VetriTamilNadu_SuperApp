@@ -9,8 +9,8 @@ import { db } from '../db'
  * Ask Vetri backend — a thin delegate to the AI Operating System orchestrator
  * (`features/ai/engine`). This handler only assembles the live platform state
  * (citizen, wallet, applications, schemes) and passes it in; every reply is
- * computed by the intent → context → plan → tools → compose pipeline. No
- * intent lists, no canned replies live here anymore.
+ * computed by the rule-based intent → context → plan → tools → compose
+ * pipeline (keyword matching and sentence templates, not a language model).
  */
 
 function rawState(): RawState {

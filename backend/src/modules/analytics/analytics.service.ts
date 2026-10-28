@@ -93,8 +93,13 @@ export class AnalyticsService {
       this.prisma.$queryRaw<Point[]>`
         SELECT k.category AS label, count(*)::int AS value FROM "Complaint" k JOIN "Citizen" c ON c.id = k."citizenId"
         WHERE k."deletedAt" IS NULL AND ${scope} GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 4`,
+      // Right to Services compliance per department: decided on time, or still
+      // open and inside the deadline, as a share of all non-rejected cases.
       this.prisma.$queryRaw<{ label: string; done: number; total: number }[]>`
-        SELECT d.name AS label, count(*) FILTER (WHERE a.stage = 'completed')::int AS done, count(*)::int AS total
+        SELECT d.name AS label,
+               count(*) FILTER (WHERE (a.stage = 'completed' AND (a."slaDeadline" IS NULL OR a."updatedAt" <= a."slaDeadline"))
+                                   OR (a.stage NOT IN ('completed','rejected') AND (a."slaDeadline" IS NULL OR a."slaDeadline" >= now())))::int AS done,
+               count(*) FILTER (WHERE a.stage <> 'rejected')::int AS total
         FROM "Application" a JOIN "Citizen" c ON c.id = a."citizenId" JOIN "Department" d ON d.id = a."departmentId"
         WHERE a."deletedAt" IS NULL AND ${scope} GROUP BY 1 ORDER BY 3 DESC LIMIT 5`,
       this.prisma.citizen.findMany({ where: { district: DISTRICT, deletedAt: null, applications: { some: {} } }, select: { gender: true, dob: true } }),

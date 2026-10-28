@@ -9,6 +9,7 @@ import { AuditService } from '../../common/audit/audit.service'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { PrismaService } from '../../prisma/prisma.service'
 import { buildProcessModel, toBpmnXml } from '../workflow/bpmn'
+import { toDmnXml } from '../workflow/dmn'
 import { WorkflowEngine } from '../workflow/workflow.engine'
 import { SlaService } from './sla.service'
 import { WorkingCalendar } from '../workflow/calendar.service'
@@ -205,6 +206,15 @@ export class AdminController {
 @Controller('workflows')
 export class WorkflowController {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** DMN 1.3 decision tables for the welfare-scheme eligibility rules. */
+  @Get('eligibility/dmn')
+  @Header('Content-Type', 'application/xml; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="scheme-eligibility.dmn"')
+  async dmn() {
+    const schemes = await this.prisma.scheme.findMany({ include: { rules: { orderBy: { id: 'asc' } } }, orderBy: [{ matchScore: 'desc' }, { name: 'asc' }] })
+    return toDmnXml(schemes)
+  }
 
   @Get(':code/model')
   async model(@Param('code') code: string) {

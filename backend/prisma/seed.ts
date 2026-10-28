@@ -235,9 +235,10 @@ async function main() {
     const c = await prisma.citizen.create({
       data: {
         citizenId: `TN-2024-${String(1000 + i).padStart(4, '0')}-${2000 + i}`, fullName: name,
-        dob: `${1 + rand(28)}/${1 + rand(12)}/19${60 + rand(45)}`, gender: pick(['Male', 'Female'], i),
+        dob: `${1 + rand(28)}/${1 + rand(12)}/19${60 + rand(45)}`, gender: pick(['Male', 'Female'], i + Math.floor(i / 4)),
         mobile: `+91 9${String(700000000 + i).slice(0, 9)}`, aadhaarMasked: `XXXX XXXX ${1000 + rand(9000)}`,
-        district: pick(TN_DISTRICTS, i), taluk: pick(CHENNAI_TALUKS, i), verified: i % 3 !== 0,
+        // A quarter of the population in Chennai, so the constituency view has depth.
+        district: i % 4 === 0 ? 'Chennai' : pick(TN_DISTRICTS, i), taluk: pick(CHENNAI_TALUKS, i), verified: i % 3 !== 0,
         verifiedVia: i % 3 !== 0 ? ['Aadhaar'] : [],
         addresses: { create: [{ kind: 'current', line: `${1 + rand(99)}, ${pick(['Main Rd', 'Cross St', 'Bazaar St'], i)}`, area: pick(CHENNAI_TALUKS, i), district: pick(TN_DISTRICTS, i), pincode: `6000${10 + rand(89)}` }] },
       },
@@ -296,14 +297,26 @@ async function main() {
   let appSeq = 44822
   for (let i = 0; i < 496; i++) {
     const svc = pick(SERVICES, i)
-    const stage = pick(STAGES, i * 7)
+    // A live service mix: most applications decided, the rest spread across stages.
+    const stage = i % 10 < 6 ? ApplicationStage.completed : i % 10 === 6 ? ApplicationStage.rejected
+      : pick(STAGES.filter((s) => s !== ApplicationStage.completed && s !== ApplicationStage.rejected), i * 7)
     const cid = pick(citizenIds, i + 1)
-    const createdAt = daysAgo(rand(60))
+    // Decided cases span two months; open ones sit mostly inside their charter
+    // window, so roughly one in ten is past its deadline.
+    const open = stage !== ApplicationStage.completed && stage !== ApplicationStage.rejected
+    // (+0.5 day keeps every deadline half a day clear of "now", so none expires
+    // seconds after seeding and lands unflagged.)
+    const createdAt = daysAgo(open ? rand(Math.ceil(charter(svc.slug) * 1.1)) + 0.5 : rand(60))
     await prisma.application.create({
       data: {
         referenceNo: `APP-2026-${svc.code.split('-')[1]}-${appSeq++}`, serviceSlug: svc.slug, serviceName: svc.name,
         citizenId: cid, stage, statusLabel: stage === 'completed' ? 'Completed' : stage === 'rejected' ? 'Rejected' : 'In Progress',
-        officerId: pick(officers, i).id, departmentId: pick(departments, i).id,
+        // The service's own department, handled by one of that department's officers.
+        ...(() => {
+          const dept = departments.find((d) => d.name === svc.dept) ?? pick(departments, i)
+          const staff = officers.filter((o) => o.departmentId === dept.id)
+          return { departmentId: dept.id, officerId: (staff.length ? pick(staff, i) : pick(officers, i)).id }
+        })(),
         certIssued: ['walletDelivery', 'notified', 'completed'].includes(stage), createdAt, ...timing(svc.slug, stage, createdAt, i),
       },
     })

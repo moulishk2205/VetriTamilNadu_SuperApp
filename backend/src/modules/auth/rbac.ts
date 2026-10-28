@@ -5,7 +5,7 @@ import { Role } from '@prisma/client'
  * the verify response carries the same permission set the UI already guards on.
  */
 export const ROLE_PERMISSIONS: Record<Role, string[]> = {
-  CITIZEN: ['citizen:read', 'citizen:write', 'application:create', 'application:read', 'complaint:create', 'complaint:read', 'document:read'],
+  CITIZEN: ['citizen:read', 'citizen:write', 'application:create', 'application:read', 'complaint:create', 'complaint:read', 'document:read', 'analytics:read'],
   OFFICER: ['application:read', 'application:process', 'complaint:read', 'complaint:resolve', 'document:issue'],
   DEPARTMENT: ['application:read', 'application:process', 'analytics:read'],
   MLA: ['analytics:read'],

@@ -28,6 +28,8 @@ export type OfficerAction = 'approve' | 'reject' | 'correction' | 'escalate' | '
 
 export const officerApi = {
   queue: (): Promise<OfficerQueue> => apiClient.get('/officer/queue', { schema: QueueSchema }),
+  /** One application in the officer's jurisdiction (GET /applications/:id is citizen-only). */
+  get: (id: string): Promise<ApplicationDTO> => apiClient.get(`/officer/applications/${id}`, { schema: ApplicationDTOSchema }),
   stats: (): Promise<OfficerStats> => apiClient.get('/officer/stats', { schema: StatsSchema }),
   act: (id: string, action: OfficerAction, note?: string): Promise<ApplicationDTO> =>
     apiClient.post(`/officer/applications/${id}/action`, { action, note }, { schema: ApplicationDTOSchema }),

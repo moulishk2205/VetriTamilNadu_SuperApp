@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import type { Citizen } from '@/types/models/citizen'
 import { authApi, type Credentials, type DemoPersona, type VerifyResult } from '@/features/auth/api/authApi'
 import { tokenStore } from '@/lib/api/tokenStore'
+import { ApiError } from '@/lib/api/errors'
 import { citizenSessionStorage, purgeLegacyCitizenData } from '@/lib/storage/citizenData'
 import { useAiStore } from '@/store/aiStore'
 import { useDraftStore } from '@/store/draftStore'
@@ -57,13 +58,19 @@ export const useAuthStore = create<AuthState>()(
           const tokens = await authApi.refresh(rt)
           set({ refreshToken: tokens.refreshToken })
           return tokens.accessToken
-        } catch {
-          await get().logout()
+        } catch (e) {
+          // Only a rejected token ends the session. A network blip, timeout or
+          // 5xx keeps it (and the citizen's drafts); the next request retries.
+          const dead = e instanceof ApiError && (e.kind === 'unauthorized' || e.kind === 'validation')
+          if (dead) await get().logout()
           return null
         }
       }
 
       const startSession = (res: VerifyResult) => {
+        // A new sign-in never inherits the previous person's data or cache.
+        clearCitizenData()
+        queryClient.clear()
         tokenStore.setAccessToken(res.tokens.accessToken)
         tokenStore.setRefreshHandler(refreshHandler)
         set({

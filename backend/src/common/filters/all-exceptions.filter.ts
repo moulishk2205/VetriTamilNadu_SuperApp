@@ -10,6 +10,11 @@ const PRISMA_STATUS: Record<string, [HttpStatus, string]> = {
   P2025: [HttpStatus.NOT_FOUND, 'Not found'],
 }
 
+function isClientError(e: unknown): e is { status: number } {
+  const status = (e as { status?: unknown } | null)?.status
+  return typeof status === 'number' && status >= 400 && status < 500
+}
+
 /**
  * Normalizes every error into the shape the frontend's `ApiError` layer expects:
  * `{ message, code?, fieldErrors? }` with the correct HTTP status.
@@ -41,6 +46,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = Array.isArray(b.message) ? (b.message as string[]).join('; ') : String(b.message ?? exception.message)
         if (Array.isArray(b.message)) fieldErrors = { _: b.message as string[] }
       }
+    } else if (isClientError(exception)) {
+      // body-parser and friends (malformed JSON, payload too large): keep the
+      // 4xx status, never their message.
+      status = exception.status
+      message = 'Bad request'
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError && PRISMA_STATUS[exception.code]) {
       const [mapped, text] = PRISMA_STATUS[exception.code]
       status = mapped

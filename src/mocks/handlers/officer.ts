@@ -99,6 +99,12 @@ export const officerHandlers = [
     })
   }),
 
+  /** One application for the officer review screen (mirrors the backend route). */
+  http.get('/api/officer/applications/:id', ({ params }) => {
+    const r = findRecord(params.id as string)
+    return r ? HttpResponse.json(toDTO(r)) : new HttpResponse(null, { status: 404 })
+  }),
+
   /** Officer action on an application — the heart of the portal. */
   http.post('/api/officer/applications/:id/action', async ({ params, request }) => {
     const r = findRecord(params.id)
@@ -110,15 +116,14 @@ export const officerHandlers = [
 
     switch (action) {
       case 'approve': {
-        // Digital signature (placeholder) → certificate generation → wallet →
-        // notified → completed, each a legal engine transition w/ side-effects.
-        let guard = 0
-        while (!isTerminal(getWorkflowDefinition(r.instance.definitionId)!, r.instance.currentStage) && guard < 15) {
-          advanceRecord(r)
-          guard += 1
+        // One legal step, like the backend: the certificate is issued only after
+        // approval → digital signature → generation → wallet delivery.
+        if (isTerminal(getWorkflowDefinition(r.instance.definitionId)!, r.instance.currentStage)) {
+          return HttpResponse.json({ message: 'Cannot approve from this stage' }, { status: 409 })
         }
-        audit(actor, 'approve+issue', r.referenceNo, note)
-        pushNotification('Application Approved', `${meta?.name} ${r.referenceNo} approved by ${OFFICER_ME.name}. Certificate issued to your Wallet.`, '/wallet', 'CheckCircle', 'ok')
+        advanceRecord(r)
+        audit(actor, 'approve', r.referenceNo, note)
+        pushNotification('Application Progressed', `${meta?.name} ${r.referenceNo} moved forward by ${OFFICER_ME.name}.`, '/tracker', 'CheckCircle', 'ok')
         break
       }
       case 'reject': {

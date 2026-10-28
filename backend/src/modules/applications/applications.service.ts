@@ -72,7 +72,7 @@ export class ApplicationsService {
   /** The officer behind a staff token. Only OFFICER tokens carry one. */
   async officerFor(user: JwtUser): Promise<Officer> {
     const officer = user.officerId ? await this.prisma.officer.findUnique({ where: { id: user.officerId } }) : null
-    if (!officer) throw new ForbiddenException('This action requires an officer profile')
+    if (!officer || officer.deletedAt) throw new ForbiddenException('This action requires an officer profile')
     return officer
   }
 

@@ -18,6 +18,9 @@ export function auditRequest(prisma: PrismaService, req: Request, status?: numbe
   if (!MUTATING.has(req.method) || !req.route || status === 429) return
   const user = req.user as JwtUser | undefined
   const failed = status !== undefined && status >= 400
+  // Anonymous failures are recorded only for sign-in endpoints (failed logins);
+  // elsewhere they would let unauthenticated traffic fill the trail.
+  if (failed && !user && !req.path.includes('/auth/')) return
   void prisma.auditLog
     .create({
       data: {

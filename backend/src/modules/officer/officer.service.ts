@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common'
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { ApplicationStage, Officer, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import type { JwtUser } from '../../common/decorators/current-user.decorator'
@@ -16,6 +16,17 @@ export class OfficerService {
     private readonly apps: ApplicationsService,
     private readonly engine: WorkflowEngine,
   ) {}
+
+  /** One application in the officer's jurisdiction, for the review screen. */
+  async one(idOrRef: string, user: JwtUser) {
+    const officer = await this.apps.officerFor(user)
+    const app = await this.prisma.application.findFirst({
+      where: { AND: [{ OR: [{ id: idOrRef }, { referenceNo: idOrRef }] }, this.apps.officerScope(officer)] },
+      include: { officer: true, department: true, remarks: true },
+    })
+    if (!app) throw new NotFoundException('Application not found')
+    return this.apps.toDto(app, app.officer, app.department?.name)
+  }
 
   async queue(user: JwtUser) {
     const officer = await this.apps.officerFor(user)
@@ -84,8 +95,13 @@ export class OfficerService {
         break
       }
       case 'transfer': {
-        const other = await this.prisma.officer.findFirst({ where: { id: { not: app.officerId ?? officer.id } } })
-        if (other) {
+        // Stay inside the jurisdiction: another active officer in the same district.
+        const other = await this.prisma.officer.findFirst({
+          where: { id: { notIn: [officer.id, ...(app.officerId ? [app.officerId] : [])] }, district: officer.district, deletedAt: null },
+          orderBy: { createdAt: 'asc' },
+        })
+        if (!other) throw new ConflictException('No other officer in this jurisdiction to transfer to')
+        {
           await this.prisma.application.update({ where: { id: app.id }, data: { officerId: other.id, departmentId: other.departmentId } })
           await this.writeAudit(actor, 'transfer', app.referenceNo, `→ ${other.name}`)
           await this.notify(app.citizenId, 'Officer Reassigned', `${svcName} ${app.referenceNo} transferred to ${other.name}, ${other.designation}.`, '/tracker', 'Users', 'info', 'application')
@@ -102,7 +118,12 @@ export class OfficerService {
   async auditTrail() {
     const items = await this.prisma.auditLog.findMany({ orderBy: { at: 'desc' }, take: 200 })
     return {
-      items: items.map((a) => ({ id: a.id, actor: a.actor, action: a.action, entity: a.entity, entityId: a.entityId, at: a.at.toISOString(), note: a.note ?? undefined })),
+      items: items.map((a) => {
+        // Rejected requests are recorded too; say so rather than list them as actions.
+        const meta = (a.meta ?? {}) as { outcome?: string; status?: number }
+        const note = meta.outcome === 'failure' ? `Rejected (HTTP ${meta.status ?? '?'})` : a.note ?? undefined
+        return { id: a.id, actor: a.actor, action: a.action, entity: a.entity, entityId: a.entityId, at: a.at.toISOString(), note }
+      }),
       total: items.length,
     }
   }

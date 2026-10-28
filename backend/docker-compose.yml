@@ -63,6 +63,8 @@ services:
       GATEWAY_MODE: mock
       AUTH_MOCK: ${AUTH_MOCK:-false}
       SEED_ON_BOOT: ${SEED_ON_BOOT:-false}
+      SWAGGER: ${SWAGGER:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-}
     ports:
       - '4000:4000'
     healthcheck:

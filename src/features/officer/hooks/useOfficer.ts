@@ -4,10 +4,15 @@ import { officerApi, type OfficerAction } from '../api/officerApi'
 export const officerKeys = {
   queue: ['officer', 'queue'] as const,
   stats: ['officer', 'stats'] as const,
+  application: (id: string) => ['officer', 'application', id] as const,
 }
 
 export function useOfficerQueue() {
   return useQuery({ queryKey: officerKeys.queue, queryFn: officerApi.queue })
+}
+
+export function useOfficerApplication(id: string | undefined) {
+  return useQuery({ queryKey: officerKeys.application(id ?? ''), queryFn: () => officerApi.get(id as string), enabled: Boolean(id) })
 }
 
 export function useOfficerStats() {

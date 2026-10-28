@@ -3,9 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { CheckCircle, XCircle, FileText, AlertTriangle, Users, User, PenLine, Wallet } from 'lucide-react'
 import { StatusBar, Header, Card, Btn } from '@/components/ui'
 import { useC } from '@/hooks/useUi'
-import { useApplicationQuery } from '@/features/applications/hooks/useApplications'
 import { presentTimeline } from '@/features/applications/timeline'
-import { useOfficerAction } from '../hooks/useOfficer'
+import { useOfficerAction, useOfficerApplication } from '../hooks/useOfficer'
 import type { OfficerAction } from '../api/officerApi'
 import { getServiceMeta } from '@/features/services/catalog'
 
@@ -19,7 +18,7 @@ export default function OfficerReview() {
   const { id = '' } = useParams()
   const c = useC()
   const navigate = useNavigate()
-  const { data: app, isLoading } = useApplicationQuery(id)
+  const { data: app, isLoading } = useOfficerApplication(id)
   const act = useOfficerAction()
   const [note, setNote] = useState('')
   const [confirm, setConfirm] = useState<OfficerAction | null>(null)

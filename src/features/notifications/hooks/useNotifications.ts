@@ -3,12 +3,15 @@ import { useQuery } from '@tanstack/react-query'
 import { useC } from '@/hooks/useUi'
 import { resolveIcon } from '@/components/ui/iconRegistry'
 import type { Colors } from '@/styles/theme'
+import { useAuthStore } from '@/store/authStore'
 import { notificationsApi } from '../api/notificationsApi'
 
 export const notificationKeys = { all: ['notifications'] as const }
 
+/** Notifications belong to a citizen; staff sessions have none to fetch. */
 export function useNotificationsQuery() {
-  return useQuery({ queryKey: notificationKeys.all, queryFn: notificationsApi.list })
+  const isCitizen = useAuthStore((s) => s.isAuthenticated && s.role === 'citizen')
+  return useQuery({ queryKey: notificationKeys.all, queryFn: notificationsApi.list, enabled: isCitizen })
 }
 
 /** View shape consumed by NotificationsScreen. Icon strings → components and

@@ -82,7 +82,7 @@ export const LOGIN_COPY: Record<Lang, LoginCopy> = {
     sendNew: 'Send a new code',
     sendNewIn: (time) => `You can send a new code in\u00A0${time}.`,
     sentAgain: 'We sent a new code.',
-    trust: 'Your session is encrypted. Vetri never stores your Aadhaar number or OTP.',
+    trust: 'Codes are single-use and expire in 5 minutes. Vetri keeps only a one-way hash of your number, never the Aadhaar number itself.',
 
     methodsLabel: 'Sign-in method',
     methodOtp: 'Mobile OTP',
@@ -132,7 +132,7 @@ export const LOGIN_COPY: Record<Lang, LoginCopy> = {
     sendNew: 'புதிய குறியீட்டை அனுப்பு',
     sendNewIn: (time) => `${time}\u00A0கழித்துப் புதிய குறியீட்டை அனுப்பலாம்.`,
     sentAgain: 'புதிய குறியீட்டை அனுப்பியுள்ளோம்.',
-    trust: 'உங்கள் அமர்வு மறையாக்கம் செய்யப்பட்டுள்ளது. உங்கள் ஆதார் எண்ணையோ OTP-யையோ வெற்றி சேமிப்பதில்லை.',
+    trust: 'குறியீடுகள் ஒருமுறை மட்டுமே பயன்படும், 5 நிமிடங்களில் காலாவதியாகும். உங்கள் எண்ணின் ஒருவழி ஹாஷ் மட்டுமே சேமிக்கப்படும்; ஆதார் எண் ஒருபோதும் சேமிக்கப்படாது.',
 
     methodsLabel: 'உள்நுழையும் முறை',
     methodOtp: 'கைபேசி OTP',

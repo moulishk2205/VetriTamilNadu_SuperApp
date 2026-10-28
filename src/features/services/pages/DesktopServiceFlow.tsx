@@ -504,8 +504,8 @@ export default function DesktopServiceFlow() {
                   })}
                 </div>
                 <p style={{ fontSize: 12, color: c.txt2, marginTop: 18, paddingTop: 14, borderTop: `1px solid ${c.bdr}`, lineHeight: 1.6 }}>
-                  The fee is collected by the department when your application is processed. Vetri records your chosen method with the
-                  application; no card or UPI credentials are captured here.
+                  Vetri does not take payments yet. The department collects the fee when it processes your application; nothing you choose
+                  here is charged or stored, and no card or UPI details are asked for.
                 </p>
               </Panel>
             </>

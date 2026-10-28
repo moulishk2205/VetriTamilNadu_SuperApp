@@ -68,8 +68,49 @@ export default function DesktopDashboard() {
         </div>
       )}
 
+      {/* Services, constituency and updates lead; your action and applications follow. */}
       <div className="vh-grid">
-        <section className={`vh-card vh-a${en}${!board.loading && urgent.length > 0 ? ' vh-card--urgent' : ''}`} style={enter(1)} aria-labelledby="h-action">
+        <section className={`vh-card vh-c${en}`} style={enter(1)} aria-labelledby="h-svc">
+          <div className="vh-ch"><h2 id="h-svc">{t('Apply for a service')}</h2><button className="vh-link" onClick={() => onNav('services')}>All {services.length || ''} services<ChevronRight size={16} aria-hidden="true" /></button></div>
+          {servicesLoading ? <><div className="vh-skel" /><div className="vh-skel" /></> : (
+            <div className="vh-svc">
+              {popular.map((s) => (
+                <button key={s.id} onClick={() => onNav(`service/${s.id}`)}>
+                  <span className="vh-sq" style={{ background: s.colour }}><s.icon size={20} aria-hidden="true" /></span>
+                  <span style={{ minWidth: 0 }}><b>{s.n}</b><small>{duration(s.time)} · {s.fee}</small></span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className={`vh-card vh-d${en}`} style={enter(2)} aria-labelledby="h-area">
+          <div className="vh-ch" style={{ paddingBottom: '.5em' }}><h2 id="h-area">Your constituency</h2><button className="vh-link" onClick={() => onNav('mla')}>Full report<ChevronRight size={16} aria-hidden="true" /></button></div>
+          <div className="vh-map"><TamilNaduMap focus={area.constituency} /><span>{area.constituency}</span></div>
+          <div className="vh-stats">
+            <p><b>{done}<i>%</i></b><small>completed</small></p>
+            <p><b>{area.stats.avgResolutionDays}</b><small>days to decide</small></p>
+            <p><b>{area.stats.pending}</b><small>in progress</small></p>
+          </div>
+          {issues.length > 0 && (
+            <p style={{ padding: '.75em 1.125em 0', fontSize: '.875em', color: 'var(--ink2)' }}>
+              Most reported here: {issues.map((x, i) => <span key={x.label}>{i > 0 && ', '}<b style={{ color: 'var(--ink)', fontWeight: 600 }}>{x.label.toLowerCase()}</b> ({x.value})</span>)}
+            </p>
+          )}
+          <div style={{ padding: '.75em 1em 1em' }}><button className="vh-btn vh-btn--line" style={{ width: '100%' }} onClick={() => onNav('complaint')}>Report an issue in {area.constituency}<ArrowRight size={17} aria-hidden="true" /></button></div>
+        </section>
+
+        <section className={`vh-card vh-e${en}`} style={enter(3)} aria-labelledby="h-news">
+          <div className="vh-ch"><h2 id="h-news">Recent updates</h2><button className="vh-link" onClick={() => onNav('notifications')}>All<ChevronRight size={16} aria-hidden="true" /></button></div>
+          {(notifications ?? []).length === 0 && <p style={{ padding: '.2em 1.375em 1.4em', color: 'var(--ink2)', fontSize: '.94em' }}>Updates about your applications and documents will appear here.</p>}
+          {(notifications ?? []).slice(0, 4).map((n) => (
+            <button key={n.id} className="vh-row" style={{ gridTemplateColumns: 'minmax(0,1fr)', padding: '.62em 1.375em' }} onClick={() => onNav(n.actionPath ? n.actionPath.replace(/^\//, '') : 'notifications')}>
+              <span><b style={{ fontSize: '.91em' }}>{n.title}</b><small style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.timeLabel ? `${n.timeLabel} · ` : ''}{n.body}</small></span>
+            </button>
+          ))}
+        </section>
+
+        <section className={`vh-card vh-a${en}${!board.loading && urgent.length > 0 ? ' vh-card--urgent' : ''}`} style={enter(4)} aria-labelledby="h-action">
           <div className="vh-ch"><h2 id="h-action">{t('Needs your action')}{urgent.length > 0 && <span className="vh-badge">{urgent.length}</span>}</h2></div>
           {board.loading ? <div className="vh-skel" /> : urgent.length === 0 ? (
             <div style={{ display: 'flex', gap: 14, padding: '.4em 1.375em 1.4em' }}>
@@ -95,10 +136,10 @@ export default function DesktopDashboard() {
           )}
         </section>
 
-        <section className={`vh-card vh-b${en}`} style={enter(2)} aria-labelledby="h-apps">
+        <section className={`vh-card vh-b${en}`} style={enter(5)} aria-labelledby="h-apps">
           <div className="vh-ch"><h2 id="h-apps">{t('Your applications')}</h2>{board.totalApplications > 0 && <button className="vh-link" onClick={() => onNav('tracker')}>See all {board.totalApplications}<ChevronRight size={16} aria-hidden="true" /></button>}</div>
           {board.loading ? <><div className="vh-skel" /><div className="vh-skel" /></> : board.applications.length === 0 ? (
-            <p style={{ padding: '.2em 1.375em 1.4em', color: 'var(--ink2)' }}>You have not applied for anything yet. Choose a service below — your application will appear here with each step explained.</p>
+            <p style={{ padding: '.2em 1.375em 1.4em', color: 'var(--ink2)' }}>You have not applied for anything yet. Choose a service above — your application will appear here with each step explained.</p>
           ) : board.applications.slice(0, 3).map((r) => (
             <button key={r.id} className="vh-row" style={{ gridTemplateColumns: 'minmax(0,1.25fr) minmax(0,1.5fr) minmax(0,.9fr) 20px' }} onClick={() => onNav(r.state === 'done' ? 'wallet' : 'tracker')} aria-label={`${r.title}, reference ${r.ref}: ${STATE[r.state].label ?? r.status}`}>
               <span><b>{r.title}</b><small className="vh-mono">{r.ref}</small></span>
@@ -108,49 +149,12 @@ export default function DesktopDashboard() {
                 <small className="v-num">{r.state === 'done' ? 'Issued to your Digital Locker' : `Step ${r.step} of ${r.steps} · ${r.stageNow}`}</small>
               </span>
               <span className="vh-due" style={r.state === 'done' ? { color: 'var(--link)', fontWeight: 650 } : undefined}>
-                {r.state === 'done' ? 'Open locker' : r.daysLeft != null ? <>Decision due<br />in {plural(r.daysLeft, 'day', 'days')}</> : r.stageNext ? <>Next:<br />{r.stageNext}</> : ''}
+                {r.state === 'done' ? 'Open locker'
+                  : r.daysLeft != null && r.daysLeft < 0 ? <span style={{ color: '#C92A2A', fontWeight: 650 }}>Overdue by<br />{plural(-r.daysLeft, 'day', 'days')}</span>
+                  : r.daysLeft != null ? <>Decision due<br />in {plural(r.daysLeft, 'day', 'days')}</>
+                  : r.stageNext ? <>Next:<br />{r.stageNext}</> : ''}
               </span>
               <ChevronRight size={20} color="var(--chev)" aria-hidden="true" />
-            </button>
-          ))}
-        </section>
-
-        <section className={`vh-card vh-c${en}`} style={enter(3)} aria-labelledby="h-svc">
-          <div className="vh-ch"><h2 id="h-svc">{t('Apply for a service')}</h2><button className="vh-link" onClick={() => onNav('services')}>All {services.length || ''} services<ChevronRight size={16} aria-hidden="true" /></button></div>
-          {servicesLoading ? <><div className="vh-skel" /><div className="vh-skel" /></> : (
-            <div className="vh-svc">
-              {popular.map((s) => (
-                <button key={s.id} onClick={() => onNav(`service/${s.id}`)}>
-                  <span className="vh-sq" style={{ background: s.colour }}><s.icon size={20} aria-hidden="true" /></span>
-                  <span style={{ minWidth: 0 }}><b>{s.n}</b><small>{duration(s.time)} · {s.fee}</small></span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className={`vh-card vh-d${en}`} style={enter(4)} aria-labelledby="h-area">
-          <div className="vh-ch" style={{ paddingBottom: '.5em' }}><h2 id="h-area">Your constituency</h2><button className="vh-link" onClick={() => onNav('mla')}>Full report<ChevronRight size={16} aria-hidden="true" /></button></div>
-          <div className="vh-map"><TamilNaduMap focus={area.constituency} /><span>{area.constituency}</span></div>
-          <div className="vh-stats">
-            <p><b>{done}<i>%</i></b><small>applications completed</small></p>
-            <p><b>{area.stats.avgResolutionDays}<i> days</i></b><small>average to decide</small></p>
-            <p><b>{area.stats.pending}</b><small>still in progress</small></p>
-          </div>
-          {issues.length > 0 && (
-            <p style={{ padding: '.75em 1.125em 0', fontSize: '.875em', color: 'var(--ink2)' }}>
-              Most reported here: {issues.map((x, i) => <span key={x.label}>{i > 0 && ', '}<b style={{ color: 'var(--ink)', fontWeight: 600 }}>{x.label.toLowerCase()}</b> ({x.value})</span>)}
-            </p>
-          )}
-          <div style={{ padding: '.75em 1em 1em' }}><button className="vh-btn vh-btn--line" style={{ width: '100%' }} onClick={() => onNav('complaint')}>Report an issue in {area.constituency}<ArrowRight size={17} aria-hidden="true" /></button></div>
-        </section>
-
-        <section className={`vh-card vh-e${en}`} style={enter(5)} aria-labelledby="h-news">
-          <div className="vh-ch"><h2 id="h-news">Recent updates</h2><button className="vh-link" onClick={() => onNav('notifications')}>All<ChevronRight size={16} aria-hidden="true" /></button></div>
-          {(notifications ?? []).length === 0 && <p style={{ padding: '.2em 1.375em 1.4em', color: 'var(--ink2)', fontSize: '.94em' }}>Updates about your applications and documents will appear here.</p>}
-          {(notifications ?? []).slice(0, 4).map((n) => (
-            <button key={n.id} className="vh-row" style={{ gridTemplateColumns: 'minmax(0,1fr)', padding: '.62em 1.375em' }} onClick={() => onNav(n.actionPath ? n.actionPath.replace(/^\//, '') : 'notifications')}>
-              <span><b style={{ fontSize: '.91em' }}>{n.title}</b><small style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.timeLabel ? `${n.timeLabel} · ` : ''}{n.body}</small></span>
             </button>
           ))}
         </section>

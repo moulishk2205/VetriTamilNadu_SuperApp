@@ -96,10 +96,10 @@ export const HOME_CSS = `
 .vh-map svg{display:block;width:100%;height:100%}
 .vh-map span{position:absolute;right:10px;top:10px;background:#8A1C15;color:#fff;font-size:.82em;font-weight:700;padding:.3em .8em;border-radius:8px}
 .vh-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:.75em 1em 0;text-align:center}
-.vh-stats p{background:var(--tile);border-radius:12px;padding:.5em .25em}
+.vh-stats p{background:var(--tile);border-radius:12px;padding:.5em .3em;min-width:0}
 .vh-stats b{display:block;font-size:1.36em;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap}
 .vh-stats b i{font-style:normal;font-size:.6em;font-weight:600;letter-spacing:0;color:var(--ink2)}
-.vh-stats small{display:block;font-size:.78em;color:var(--ink2);line-height:1.25}
+.vh-stats small{display:block;font-size:.78em;color:var(--ink2);line-height:1.25;overflow-wrap:break-word;hyphens:auto}
 .vh-skel{margin:.4em 1.375em 1.2em;height:4em;border-radius:12px;background:var(--tile)}
 .vh :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 

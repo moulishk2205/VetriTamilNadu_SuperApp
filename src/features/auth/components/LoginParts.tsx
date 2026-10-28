@@ -46,8 +46,8 @@ export function LoginHead({ copy, onToggleLang, sealSize = 62 }: { copy: LoginCo
       <div className="vl-lock">
         <Seal size={sealSize} />
         <div>
-          <b lang="ta">தமிழ்நாடு அரசு</b>
-          <span lang="en">Government of Tamil Nadu</span>
+          <b lang="ta">வெற்றி தமிழ்நாடு</b>
+          <span lang="en">e-Sevai prototype · not an official Government service</span>
         </div>
       </div>
       <button type="button" className="vl-lang" lang={copy.otherLangCode} onClick={onToggleLang} aria-label={copy.otherLangLabel}>

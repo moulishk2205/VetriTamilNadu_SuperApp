@@ -1,0 +1,45 @@
+VETRI: third-party notices
+==========================
+
+VETRI includes or depends on the open-source software and fonts below. Each
+remains under its own licence. All are permissive (no recurring licence fee).
+
+Frontend (package.json)
+  React, React DOM ............... MIT
+  React Router ................... MIT
+  TanStack Query ................. MIT
+  Zustand ........................ MIT
+  Zod ............................ MIT
+  Vite, @vitejs/plugin-react ..... MIT
+  Mock Service Worker (MSW) ...... MIT
+  lucide-react ................... ISC
+  qrcode ......................... MIT
+  TypeScript ..................... Apache-2.0
+
+Backend (backend/package.json)
+  NestJS (@nestjs/*) ............. MIT
+  Prisma, @prisma/client ......... Apache-2.0
+  Passport, passport-jwt ......... MIT
+  helmet ......................... MIT
+  bcrypt ......................... MIT
+  class-validator, class-transformer MIT
+  pino, nestjs-pino .............. MIT
+  BullMQ, ioredis ................ MIT
+  RxJS ........................... Apache-2.0
+  Node.js runtime ................ MIT
+
+Runtime services (docker-compose)
+  PostgreSQL 16 .................. PostgreSQL Licence (permissive)
+  Redis 7 ........................ Redis 7.4+ is RSALv2/SSPL, not open source.
+                                   Pin redis:7.2 (BSD-3) or move to Valkey (BSD-3)
+                                   before any Government deployment.
+
+Fonts (self-hosted in public/fonts, served from our own origin)
+  Inter .......................... SIL Open Font License 1.1 (The Inter Project Authors)
+  Noto Sans Tamil, Noto Serif Tamil SIL Open Font License 1.1 (Google LLC)
+
+Assets whose provenance must be confirmed before external use
+  - Tamil Nadu State emblem (Seal component and splash)
+  - Portrait photography and constituency boundary data used in the UI
+These are used in the prototype only; their source and permission are not yet
+documented.

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, HttpException, HttpStatus, Injectable, Logger, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { JwtService } from '@nestjs/jwt'
 import { AuthMethod, Citizen, Role, User } from '@prisma/client'
@@ -12,6 +12,8 @@ import type { DemoPersona, RequestOtpDto, VerifyDto } from './dto/auth.dto'
 
 const OTP_TTL_MS = 5 * 60_000
 const OTP_MAX_ATTEMPTS = 5
+/** Codes a single number may request within one code lifetime (5 minutes). */
+const OTP_MAX_PER_WINDOW = 3
 /** Fixed code, accepted only while AUTH_MOCK is on. */
 const MOCK_OTP = '123456'
 
@@ -75,20 +77,24 @@ export class AuthService implements OnModuleInit {
     const identifier = this.hashIdentifier(method, id)
     await this.purgeOtps(identifier)
 
-    // The response is identical whether or not the identity exists, so this
-    // endpoint can't be used to probe who is registered.
-    const user = this.mock ? null : await this.findUser(method, id)
-    // Hash a code either way so response time doesn't reveal registered numbers.
-    if (!this.mock && !user) await bcrypt.hash(String(randomInt(0, 1_000_000)), 10)
-    if (this.mock || user) {
-      const code = this.mock ? MOCK_OTP : String(randomInt(0, 1_000_000)).padStart(6, '0')
-      await this.prisma.otp.create({
-        data: { identifier, codeHash: await bcrypt.hash(code, 10), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
-      })
-      // No SMS connector exists yet, so a real-mode code cannot reach the user
-      // and real-mode login fails closed. Never log the code itself.
-      if (!this.mock) this.log.warn('OTP issued but not delivered: no SMS connector is configured')
+    // Per-number budget: at most OTP_MAX_PER_WINDOW codes per number per code
+    // lifetime, so requesting fresh codes can't reset the 5-guess limit.
+    // (Not in demo mode, where the code is public and teammates share numbers.)
+    const recent = this.mock ? 0 : await this.prisma.otp.count({ where: { identifier, createdAt: { gte: new Date(Date.now() - OTP_TTL_MS) } } })
+    if (recent >= OTP_MAX_PER_WINDOW) {
+      throw new HttpException('Too many codes requested for this number. Wait 5 minutes and try again.', HttpStatus.TOO_MANY_REQUESTS)
     }
+
+    // A row is written for every number, registered or not, so the response,
+    // its timing and the per-number limit reveal nothing about who is registered.
+    const user = this.mock ? null : await this.findUser(method, id)
+    const code = this.mock ? MOCK_OTP : String(randomInt(0, 1_000_000)).padStart(6, '0')
+    await this.prisma.otp.create({
+      data: { identifier, codeHash: await bcrypt.hash(code, 10), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+    })
+    // No SMS connector exists yet, so a real-mode code cannot reach the user
+    // and real-mode login fails closed. Never log the code itself.
+    if (!this.mock && user) this.log.warn('OTP issued but not delivered: no SMS connector is configured')
     // In demo mode no SMS goes out, so say so and give the fixed code; the
     // login screen shows it instead of leaving people waiting for a text.
     return { sent: true, channel: method === 'aadhaar' ? 'aadhaar-linked-mobile' : 'sms', ...(this.mock ? { demoOtp: MOCK_OTP } : {}) }
@@ -249,10 +255,11 @@ export class AuthService implements OnModuleInit {
   }
 
   /** One live code per identifier; consumed and expired rows are deleted. */
+  /** Expired rows are deleted. Earlier codes for this number stop working but
+   *  their rows stay until expiry, so they count toward the per-number budget. */
   private async purgeOtps(identifier: string): Promise<void> {
-    await this.prisma.otp.deleteMany({
-      where: { OR: [{ identifier }, { consumed: true }, { expiresAt: { lt: new Date() } }] },
-    })
+    await this.prisma.otp.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+    await this.prisma.otp.updateMany({ where: { identifier, consumed: false }, data: { consumed: true } })
   }
 
   private async issueTokens(claims: JwtUser): Promise<TokenPair> {

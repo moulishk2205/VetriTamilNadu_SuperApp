@@ -1,6 +1,6 @@
 # Vetri TN — Phase 1 Architecture & Decision Log
 
-Phase 1 converts the single-file prototype into a modular, production-grade
+Phase 1 converts the single-file prototype into a modular, prototype-stage
 frontend **without changing any pixel of the UI**. This log records the
 architectural decisions and technical debt per checkpoint. Final deliverables
 (diagram, folder tree, dependencies, production-readiness) are at the end,

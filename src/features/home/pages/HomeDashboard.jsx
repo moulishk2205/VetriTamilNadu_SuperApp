@@ -71,7 +71,7 @@ const HomeDashboard = ({onNav}) => { const c=useC(); const t=useT(); const {dark
           <div style={{position:"relative",display:"flex",alignItems:"center",gap:12}}>
             <Seal size={42}/>
             <div style={{minWidth:0,flex:1}}>
-              <p style={{fontSize:11.5,fontWeight:600,color:c.txt2}}>{t("Government of Tamil Nadu")}</p>
+              <p style={{fontSize:11.5,fontWeight:600,color:c.txt2}}>{t("Tamil Nadu e-Sevai · prototype")}</p>
               <p style={{fontSize:10,fontWeight:700,color:c.txt3,letterSpacing:"0.12em",textTransform:"uppercase",marginTop:2}}>{t("Citizen ID")}</p>
             </div>
             <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 9px 4px 7px",borderRadius:999,background:`${c.ok}14`,color:c.ok,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}><BadgeCheck size={14}/>{t("Verified")}</span>

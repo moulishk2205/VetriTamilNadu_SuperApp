@@ -1,6 +1,6 @@
 # Vetri TN — Backend (NestJS)
 
-Production-grade REST backend for the **Vetri Tamil Nadu** citizen super-app.
+Prototype-stage REST backend for the **Vetri Tamil Nadu** citizen super-app (not yet production: see the Trust Center for controls still open).
 It replaces the frontend's in-browser MSW mock backend with a real server —
 **path-for-path identical contracts**, so going live is a two-line env change on
 the frontend (no component code changes).
@@ -41,6 +41,12 @@ loopback-only override: `docker compose -f docker-compose.yml -f docker-compose.
 
 A database first created by the old `prisma db push` boot has no migration
 history. Baseline it once (see `docker-entrypoint.sh`) before upgrading.
+
+**Backups.** `./scripts/backup.sh` writes a compressed `pg_dump` to `./backups`
+and keeps the newest 14; schedule it daily and copy the folder off the host.
+`./scripts/restore.sh backups/<file>.dump` restores one in a single transaction
+(it asks you to type RESTORE first). Set `PG_CONTAINER` if your Postgres
+container is not `vetri-postgres`.
 
 ## Quick start (local, no Docker)
 

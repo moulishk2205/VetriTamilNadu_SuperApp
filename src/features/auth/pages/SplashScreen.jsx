@@ -81,7 +81,7 @@ const SplashScreen = ({onDone}) => {
       <VetriWordmark play={word} still={still} />
       <div className={`vs-tab${word ? " in" : ""}`}><span className="vs-br l" /><span className="vs-pill">GOVERNMENT SUPER APP</span><span className="vs-br r" /></div>
       <div className={`vs-bar${word ? " in" : ""}`}><i /></div>
-      <p className="vs-foot">Government of Tamil Nadu · <span lang="ta">தமிழ்நாடு அரசு</span></p>
+      <p className="vs-foot">e-Sevai 2.0 prototype · <span lang="ta">தமிழ்நாடு மக்களுக்காக</span></p>
     </div>
   );
 };

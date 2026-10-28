@@ -82,6 +82,11 @@ export default function OfficerPortal() {
                       {a.slaDaysRemaining < 0 ? `Overdue by ${-a.slaDaysRemaining} day(s): Right to Services deadline missed` : `Right to Services deadline in ${a.slaDaysRemaining} day(s)`}
                     </p>
                   )}
+                  {a.stageDaysRemaining != null && (
+                    <p style={{ fontSize: 10, color: a.stageDaysRemaining < 0 ? c.err : a.stageDaysRemaining <= 1 ? c.warn : c.txt3, marginTop: 1 }}>
+                      {a.stageDaysRemaining < 0 ? `This stage is ${-a.stageDaysRemaining} day(s) past its SLA` : `This stage due in ${a.stageDaysRemaining} day(s) (working days)`}
+                    </p>
+                  )}
                 </div>
                 <span style={{ fontSize: 10, fontWeight: 600, color: tone, padding: '4px 8px', background: `${tone}15`, borderRadius: 9999, whiteSpace: 'nowrap' }}>{a.status}</span>
                 <ChevronRight size={16} color={c.txt3} />

@@ -1,5 +1,5 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Module, NotFoundException, Param, Patch, Post, Put, Query } from '@nestjs/common'
-import { IsArray, IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator'
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Header, Module, NotFoundException, Param, Patch, Post, Put, Query } from '@nestjs/common'
+import { IsArray, IsBoolean, IsEnum, IsOptional, IsString, Matches, MaxLength } from 'class-validator'
 import { CurrentUser, type JwtUser } from '../../common/decorators/current-user.decorator'
 import { ConfigService } from '@nestjs/config'
 import { ApiTags } from '@nestjs/swagger'
@@ -11,11 +11,17 @@ import { PrismaService } from '../../prisma/prisma.service'
 import { buildProcessModel, toBpmnXml } from '../workflow/bpmn'
 import { WorkflowEngine } from '../workflow/workflow.engine'
 import { SlaService } from './sla.service'
+import { WorkingCalendar } from '../workflow/calendar.service'
 
 const OPEN = { notIn: [ApplicationStage.completed, ApplicationStage.rejected] }
 type ControlStatus = 'on' | 'warn' | 'off'
 
 /** Declared before the controller: decorator metadata reads it at class definition. */
+class HolidayDto {
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' }) date!: string
+  @IsString() @MaxLength(80) name!: string
+}
+
 class RolePermissionsDto {
   @IsArray() @IsString({ each: true }) permissions!: string[]
 }
@@ -37,6 +43,7 @@ export class AdminController {
     private readonly sla: SlaService,
     private readonly config: ConfigService,
     private readonly perms: PermissionService,
+    private readonly calendar: WorkingCalendar,
   ) {}
 
   @Get('trust')
@@ -64,7 +71,7 @@ export class AdminController {
         c('Refresh tokens hashed and rotated', 'on', 'SHA-256 at rest, single use, tied to a session'),
         c('Owner and jurisdiction scoping', 'on', 'Citizens reach only their own records; officers only their district'),
         c('Tamper-evident audit trail', chain.valid ? 'on' : 'warn', chain.valid ? `${chain.chained} rows hash-chained; failed and denied requests included` : `Chain broken at row ${chain.brokenAt?.seq}: ${chain.brokenAt?.reason}`),
-        c('Right to Services deadlines', 'on', `Published charter days per service; breaches escalate${this.sla.intervalMinutes > 0 ? ` every ${this.sla.intervalMinutes} min` : ' on demand'}`),
+        c('Right to Services deadlines', 'on', `Charter deadline per application plus a per-stage SLA, in working days (holiday calendar); reminders before, escalation after${this.sla.intervalMinutes > 0 ? ` every ${this.sla.intervalMinutes} min` : ' on demand'}`),
         c('Content Security Policy and hardened headers', 'on', "API answers with default-src 'none'; the web app ships a strict CSP"),
         c('Secrets required, non-root container', 'on', 'No default secrets; the API refuses to boot without them'),
         c('API documentation exposure', swagger ? 'warn' : 'on', swagger ? 'Swagger UI is enabled on this server' : 'Swagger UI is off'),
@@ -122,6 +129,26 @@ export class AdminController {
   }
 
   /** Accounts with their role, status and last sign-in (newest activity first). */
+  /** Holiday calendar used for every working-day deadline. */
+  @Get('holidays')
+  holidays() {
+    return this.calendar.list()
+  }
+
+  @Post('holidays')
+  async addHoliday(@CurrentUser() me: JwtUser, @Body() dto: HolidayDto) {
+    const row = await this.calendar.add(dto.date, dto.name.trim())
+    await this.audit.record({ actor: `${me.role}:${me.sub}`, action: 'holiday-add', entity: 'holiday', entityId: dto.date, note: dto.name })
+    return row
+  }
+
+  @Delete('holidays/:date')
+  async removeHoliday(@CurrentUser() me: JwtUser, @Param('date') date: string) {
+    await this.calendar.remove(date)
+    await this.audit.record({ actor: `${me.role}:${me.sub}`, action: 'holiday-remove', entity: 'holiday', entityId: date })
+    return { removed: date }
+  }
+
   @Get('users')
   async users(@Query('q') q?: string) {
     const term = q?.trim()

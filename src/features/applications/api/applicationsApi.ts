@@ -34,6 +34,9 @@ export const ApplicationDTOSchema = z.object({
   department: z.string(),
   officer: z.object({ name: z.string(), designation: z.string(), jurisdiction: z.string() }).nullable(),
   slaDaysRemaining: z.number().nullable(),
+  /** Current stage's own SLA (working days, holidays excluded); null when the stage has none. */
+  stageDeadline: z.string().nullish(),
+  stageDaysRemaining: z.number().nullish(),
   createdAt: z.string(),
   updatedAt: z.string(),
   timeline: z.array(TimelineRowSchema),

@@ -275,7 +275,11 @@ async function main() {
     const took = Math.max(1, Math.round(days * (i % 7 === 0 ? 1.4 : 0.35 + (i % 5) * 0.12)))
     const updatedAt = terminal ? new Date(Math.min(Date.now(), createdAt.getTime() + took * 86_400_000)) : undefined
     const slaBreachedAt = !terminal && slaDeadline.getTime() < Date.now() ? slaDeadline : undefined
-    return { slaDeadline, updatedAt, slaBreachedAt }
+    // Per-stage SLA (document verification 1, inspection 3, approval 2 days):
+    // open cases at those stages are partway through their stage window.
+    const stageSla = ({ docVerification: 1, inspection: 3, approval: 2 } as Partial<Record<ApplicationStage, number>>)[stage]
+    const stageDeadline = !terminal && stageSla ? new Date(Date.now() + (stageSla - 0.5) * 86_400_000) : undefined
+    return { slaDeadline, updatedAt, slaBreachedAt, stageDeadline }
   }
 
   for (const a of demoApps) {

@@ -20,10 +20,11 @@ import { TrustCenter } from '@/features/admin/components/TrustCenter'
 import { ProcessMap } from '@/features/admin/components/ProcessMap'
 import { UserAdmin } from '@/features/admin/components/UserAdmin'
 import { PermissionMatrix } from '@/features/admin/components/PermissionMatrix'
+import { HolidayCalendar } from '@/features/admin/components/HolidayCalendar'
 
 const AuditSchema = z.object({ items: z.array(z.object({ id: z.string(), actor: z.string(), action: z.string(), entity: z.string(), entityId: z.string(), at: z.string(), note: z.string().optional() })), total: z.number() })
 
-const TABS = ['Overview', 'Trust Center', 'Process model', 'Users & roles', 'Permissions', 'Manage', 'Flags', 'Broadcast', 'Logs', 'Audit'] as const
+const TABS = ['Overview', 'Trust Center', 'Process model', 'Users & roles', 'Permissions', 'Holidays', 'Manage', 'Flags', 'Broadcast', 'Logs', 'Audit'] as const
 
 /** Super Admin Portal — platform administration over the real registries. */
 export default function AdminPortal() {
@@ -122,6 +123,8 @@ export default function AdminPortal() {
         {tab === 'Users & roles' && <UserAdmin />}
 
         {tab === 'Permissions' && <PermissionMatrix />}
+
+        {tab === 'Holidays' && <HolidayCalendar />}
 
         {tab === 'Manage' && (
           <div style={{ animation: 'fadeIn 0.3s' }}>

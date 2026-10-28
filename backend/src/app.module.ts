@@ -7,6 +7,7 @@ import configuration from './config/configuration'
 import { PrismaModule } from './prisma/prisma.module'
 import { AuditModule } from './common/audit/audit.service'
 import { PermissionsGuard, PermissionsModule } from './modules/auth/permissions'
+import { CalendarModule } from './modules/workflow/calendar.service'
 import { IntegrationsModule } from './integrations/integrations.module'
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard'
 import { RolesGuard } from './common/guards/roles.guard'
@@ -45,6 +46,7 @@ import { AdminModule } from './modules/admin/admin.controller'
     PrismaModule,
     AuditModule,
     PermissionsModule,
+    CalendarModule,
     IntegrationsModule,
     AuthModule,
     CatalogModule,

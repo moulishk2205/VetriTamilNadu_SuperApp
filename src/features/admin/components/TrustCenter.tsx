@@ -19,6 +19,7 @@ const SweepSchema = z.object({
   checkedAt: z.string(),
   breached: z.array(z.object({ referenceNo: z.string(), serviceName: z.string(), daysOverdue: z.number(), escalated: z.boolean() })),
   reminded: z.number().default(0),
+  stageBreached: z.array(z.object({ referenceNo: z.string(), stage: z.string(), escalated: z.boolean() })).default([]),
 })
 
 /**
@@ -107,6 +108,7 @@ export function TrustCenter() {
               </p>
             ))}
             {sweep.data.reminded > 0 && <p style={{ fontSize: 12.5, color: c.txt2, marginTop: 6 }}>{sweep.data.reminded} citizen(s) reminded that a decision is due within two days.</p>}
+            {sweep.data.stageBreached.length > 0 && <p style={{ fontSize: 12.5, color: c.warn, marginTop: 6 }}>{sweep.data.stageBreached.length} stage SLA(s) missed ({sweep.data.stageBreached.filter((s) => s.escalated).length} escalated): {sweep.data.stageBreached.slice(0, 3).map((s) => `${s.referenceNo} at ${s.stage}`).join(', ')}{sweep.data.stageBreached.length > 3 ? '…' : ''}</p>}
           </div>
         )}
       </Card>

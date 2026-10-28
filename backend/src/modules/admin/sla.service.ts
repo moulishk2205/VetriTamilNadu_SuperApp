@@ -11,6 +11,8 @@ export interface SweepResult {
   breached: { referenceNo: string; serviceName: string; daysOverdue: number; escalated: boolean }[]
   /** Citizens told their decision is due within two days. */
   reminded: number
+  /** Applications whose current stage overran its own SLA. */
+  stageBreached: { referenceNo: string; stage: string; escalated: boolean }[]
 }
 
 /**
@@ -89,6 +91,27 @@ export class SlaService implements OnModuleInit, OnModuleDestroy {
       })
       reminded += 1
     }
-    return { checkedAt: now.toISOString(), breached, reminded }
+    // Per-stage SLA: a stage that overran its own deadline is flagged once,
+    // audited, and escalated where the workflow allows (e.g. inspection).
+    const late = await this.prisma.application.findMany({
+      where: { deletedAt: null, stageBreachedAt: null, stageDeadline: { lt: now }, stage: OPEN },
+      take: 200,
+    })
+    const stageBreached: SweepResult['stageBreached'] = []
+    for (const app of late) {
+      const { count } = await this.prisma.application.updateMany({ where: { id: app.id, stageBreachedAt: null }, data: { stageBreachedAt: now } })
+      if (!count) continue
+      const escalated = TRANSITIONS[app.stage].includes(ApplicationStage.escalation)
+      if (escalated) {
+        await this.prisma.application.update({ where: { id: app.id }, data: { stage: ApplicationStage.escalation, statusLabel: this.engine.statusLabel(ApplicationStage.escalation), stageDeadline: null } })
+      }
+      const label = this.engine.stage(app.stage)?.label ?? app.stage
+      await this.audit.record({
+        actor: 'system:sla', action: escalated ? 'stage-sla-breach+escalate' : 'stage-sla-breach', entity: 'application', entityId: app.referenceNo,
+        note: `${label} SLA (${this.engine.stage(app.stage)?.slaDays ?? '?'} working days) missed`,
+      })
+      stageBreached.push({ referenceNo: app.referenceNo, stage: label, escalated })
+    }
+    return { checkedAt: now.toISOString(), breached, reminded, stageBreached }
   }
 }

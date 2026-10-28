@@ -1,8 +1,9 @@
-import { Controller, Get, Header, Module, NotFoundException, Param, Post, Query } from '@nestjs/common'
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Module, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common'
+import { IsBoolean, IsEnum, IsOptional } from 'class-validator'
 import { CurrentUser, type JwtUser } from '../../common/decorators/current-user.decorator'
 import { ConfigService } from '@nestjs/config'
 import { ApiTags } from '@nestjs/swagger'
-import { ApplicationStage } from '@prisma/client'
+import { ApplicationStage, Role } from '@prisma/client'
 import { AuditService } from '../../common/audit/audit.service'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { PrismaService } from '../../prisma/prisma.service'
@@ -12,6 +13,12 @@ import { SlaService } from './sla.service'
 
 const OPEN = { notIn: [ApplicationStage.completed, ApplicationStage.rejected] }
 type ControlStatus = 'on' | 'warn' | 'off'
+
+/** Declared before the controller: decorator metadata reads it at class definition. */
+class UpdateUserDto {
+  @IsOptional() @IsEnum(Role) role?: Role
+  @IsOptional() @IsBoolean() active?: boolean
+}
 
 /** Trust Center: the platform's security posture, from live state, including what is not done yet. */
 @ApiTags('admin')
@@ -87,6 +94,56 @@ export class AdminController {
   @Post('sla/sweep')
   sweep() {
     return this.sla.sweep()
+  }
+
+  /** Accounts with their role, status and last sign-in (newest activity first). */
+  @Get('users')
+  async users(@Query('q') q?: string) {
+    const term = q?.trim()
+    const rows = await this.prisma.user.findMany({
+      where: { deletedAt: null, ...(term ? { OR: [{ citizen: { fullName: { contains: term, mode: 'insensitive' } } }, { officer: { name: { contains: term, mode: 'insensitive' } } }, { mobile: { contains: term } }] } : {}) },
+      include: { citizen: { select: { fullName: true, citizenId: true } }, officer: { select: { name: true, designation: true } }, sessions: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } },
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    })
+    const open = await this.prisma.session.groupBy({ by: ['userId'], where: { endedAt: null, userId: { in: rows.map((r) => r.id) } }, _count: { _all: true } })
+    const openBy = new Map(open.map((o) => [o.userId, o._count._all]))
+    return {
+      items: rows.map((u) => ({
+        id: u.id,
+        name: u.citizen?.fullName ?? u.officer?.name ?? (u.mobile.startsWith('demo-') ? `Demo ${u.mobile.slice(5)}` : 'Staff account'),
+        detail: u.citizen ? `Citizen ${u.citizen.citizenId}` : u.officer ? u.officer.designation : u.mobile.startsWith('demo-') ? 'Demo persona' : '',
+        kind: u.citizenId ? 'citizen' : u.officerId ? 'officer' : 'staff',
+        role: u.role, active: u.active,
+        lastSignIn: u.sessions[0]?.createdAt.toISOString() ?? null,
+        openSessions: openBy.get(u.id) ?? 0,
+      })),
+    }
+  }
+
+  /**
+   * Change an account's role or status. Guard rails: you cannot change your own
+   * account; citizen accounts stay CITIZEN and officer accounts stay OFFICER
+   * (identity drives scope). Every change ends the account's sessions at once
+   * and is audited.
+   */
+  @Patch('users/:id')
+  async updateUser(@CurrentUser() me: JwtUser, @Param('id') id: string, @Body() dto: UpdateUserDto) {
+    if (id === me.sub) throw new ForbiddenException('You cannot change your own account. Ask another administrator.')
+    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null } })
+    if (!user) throw new NotFoundException('User not found')
+    if (dto.role && dto.role !== user.role) {
+      if (user.citizenId) throw new BadRequestException('Citizen accounts always have the citizen role')
+      if (user.officerId) throw new BadRequestException('Officer accounts keep the officer role; their scope comes from their post')
+      if (dto.role === Role.CITIZEN || dto.role === Role.OFFICER) throw new BadRequestException('Citizen and officer roles come from a linked identity, not from this screen')
+    }
+    const updated = await this.prisma.user.update({ where: { id }, data: { ...(dto.role ? { role: dto.role } : {}), ...(dto.active !== undefined ? { active: dto.active } : {}) } })
+    const now = new Date()
+    const ended = await this.prisma.session.updateMany({ where: { userId: id, endedAt: null }, data: { endedAt: now } })
+    await this.prisma.refreshToken.updateMany({ where: { userId: id, revoked: false }, data: { revoked: true } })
+    const changes = [dto.role && dto.role !== user.role ? `role ${user.role} → ${dto.role}` : '', dto.active !== undefined && dto.active !== user.active ? (dto.active ? 'reactivated' : 'deactivated') : ''].filter(Boolean).join(', ')
+    await this.audit.record({ actor: `${me.role}:${me.sub}`, action: 'user-update', entity: 'user', entityId: id, note: `${changes || 'no change'}; ${ended.count} session(s) ended` })
+    return { id: updated.id, role: updated.role, active: updated.active, sessionsEnded: ended.count }
   }
 }
 

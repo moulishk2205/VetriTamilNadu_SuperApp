@@ -1,11 +1,13 @@
 import { Controller, Get, Param, Query } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
+import { Permissions } from '../auth/permissions'
 import { Throttle } from '@nestjs/throttler'
 import { CurrentCitizenId } from '../../common/decorators/current-user.decorator'
 import { Public } from '../../common/decorators/public.decorator'
 import { DocumentsService } from './documents.service'
 
 @ApiTags('documents')
+@Permissions('document:read')
 @Controller('documents')
 export class DocumentsController {
   constructor(private readonly docs: DocumentsService) {}

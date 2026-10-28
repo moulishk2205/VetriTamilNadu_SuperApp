@@ -120,6 +120,15 @@ model Permission {
   @@unique([key])
 }
 
+/// The live role → permission matrix, edited from the admin portal and
+/// enforced on every request by PermissionsGuard.
+model RolePermission {
+  role       Role
+  permission String
+
+  @@id([role, permission])
+}
+
 model RefreshToken {
   id        String   @id @default(uuid())
   /// SHA-256 of the token. The token itself is never stored.

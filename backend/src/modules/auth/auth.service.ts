@@ -7,7 +7,7 @@ import { createHash, createHmac, randomInt, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma/prisma.service'
 import { toCitizenDto } from '../citizen/citizen.service'
 import type { JwtUser } from '../../common/decorators/current-user.decorator'
-import { ROLE_PERMISSIONS } from './rbac'
+import { PermissionService } from './permissions'
 import type { DemoPersona, RequestOtpDto, VerifyDto } from './dto/auth.dto'
 
 const OTP_TTL_MS = 5 * 60_000
@@ -53,6 +53,7 @@ export class AuthService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly perms: PermissionService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -150,7 +151,7 @@ export class AuthService implements OnModuleInit {
     if (count === 0) throw new UnauthorizedException('Refresh token invalid or expired')
     const user = await this.prisma.user.findUnique({ where: { id: existing.userId } })
     if (!user || !user.active || user.deletedAt) throw new UnauthorizedException('User not found')
-    return this.issueTokens(this.claimsFor(user, existing.session.id))
+    return this.issueTokens(await this.claimsFor(user, existing.session.id))
   }
 
   /** Ends the caller's session: its access tokens stop working at once and its
@@ -171,7 +172,7 @@ export class AuthService implements OnModuleInit {
   private async startSession(user: User, method: AuthMethod): Promise<LoginResult> {
     if (!user.active || user.deletedAt) throw new UnauthorizedException('This account is disabled')
     const session = await this.prisma.session.create({ data: { userId: user.id, method } })
-    const tokens = await this.issueTokens(this.claimsFor(user, session.id))
+    const tokens = await this.issueTokens(await this.claimsFor(user, session.id))
     return { tokens, ...(await this.profileFor(user)), session: { id: session.id } }
   }
 
@@ -184,17 +185,18 @@ export class AuthService implements OnModuleInit {
     const citizen = own ?? (this.mock
       ? await this.prisma.citizen.findUnique({ where: { citizenId: DEMO_CITIZEN_ID }, include: { addresses: true } })
       : null)
-    return { citizen: citizen ? toCitizenDto(citizen) : null, role: user.role.toLowerCase(), permissions: ROLE_PERMISSIONS[user.role] }
+    return { citizen: citizen ? toCitizenDto(citizen) : null, role: user.role.toLowerCase(), permissions: await this.perms.forRole(user.role) }
   }
 
-  private claimsFor(user: User, sid: string): JwtUser {
+  /** Token claims. Permissions come from the live matrix (the guard re-checks it on every request). */
+  private async claimsFor(user: User, sid: string): Promise<JwtUser> {
     return {
       sub: user.id,
       sid,
       role: user.role,
       citizenId: user.citizenId ?? undefined,
       officerId: user.officerId ?? undefined,
-      permissions: ROLE_PERMISSIONS[user.role],
+      permissions: await this.perms.forRole(user.role),
     }
   }
 

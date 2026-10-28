@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
+import { Permissions } from '../auth/permissions'
 import { CurrentCitizenId, CurrentUser, type JwtUser } from '../../common/decorators/current-user.decorator'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { ApplicationsService } from './applications.service'
@@ -20,6 +21,7 @@ export class ApplicationsController {
     return this.apps.get(id, citizenId)
   }
 
+  @Permissions('application:create')
   @Post()
   create(@CurrentCitizenId() citizenId: string, @Body() dto: CreateApplicationDto) {
     return this.apps.create(citizenId, dto)
@@ -28,6 +30,7 @@ export class ApplicationsController {
   /** Officer moves an application one legal step forward, within their own
    *  jurisdiction. Citizens cannot advance applications, including their own. */
   @Roles('OFFICER')
+  @Permissions('application:process')
   @Post(':id/advance')
   async advance(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.apps.advance(id, await this.apps.officerFor(user))

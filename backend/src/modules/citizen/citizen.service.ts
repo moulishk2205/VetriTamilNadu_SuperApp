@@ -30,11 +30,18 @@ export class CitizenService {
     return toCitizenDto(await this.load(citizenId))
   }
 
-  /** Patch only the scalar profile fields the UI edits; relations are untouched. */
+  /** Patch only the scalar profile fields the UI edits; relations are untouched.
+   *  Once verified, identity fields are locked: certificates copy the name and
+   *  date of birth, the mobile is the login identifier, and the district decides
+   *  which officers can see the citizen's applications. Changing them needs a
+   *  re-verified correction flow, not a profile edit. */
   async update(citizenId: string, patch: Record<string, unknown>) {
-    const allowed = ['fullName', 'dob', 'gender', 'mobile', 'email', 'district', 'taluk', 'state'] as const
+    const current = await this.load(citizenId)
+    const allowed = current.verified
+      ? (['email'] as const)
+      : (['fullName', 'dob', 'gender', 'email', 'district', 'taluk', 'state'] as const)
     const data: Record<string, unknown> = {}
-    for (const k of allowed) if (k in patch) data[k] = patch[k]
+    for (const k of allowed) if (k in patch && typeof patch[k] === 'string') data[k] = patch[k]
     await this.prisma.citizen.update({ where: { id: citizenId }, data })
     return toCitizenDto(await this.load(citizenId))
   }

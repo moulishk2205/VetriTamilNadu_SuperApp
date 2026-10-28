@@ -5,6 +5,7 @@ import { AuthMethod, Citizen, Role, User } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { createHash, createHmac, randomInt, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma/prisma.service'
+import { toCitizenDto } from '../citizen/citizen.service'
 import type { JwtUser } from '../../common/decorators/current-user.decorator'
 import { ROLE_PERMISSIONS } from './rbac'
 import type { DemoPersona, RequestOtpDto, VerifyDto } from './dto/auth.dto'
@@ -26,7 +27,8 @@ type OtpMethod = 'otp' | 'aadhaar'
 type TokenPair = { accessToken: string; refreshToken: string; expiresIn: number }
 
 export interface Profile {
-  citizen: Citizen | null
+  /** Same shape as GET /citizen/me (nulls become undefined, as the SPA expects). */
+  citizen: ReturnType<typeof toCitizenDto> | null
   role: string
   permissions: string[]
 }
@@ -49,8 +51,16 @@ export class AuthService implements OnModuleInit {
     private readonly config: ConfigService,
   ) {}
 
-  onModuleInit(): void {
-    if (this.mock) this.log.warn('AUTH_MOCK is ON: fixed OTP 123456 and demo personas are enabled. Never run a real deployment like this.')
+  async onModuleInit(): Promise<void> {
+    if (this.mock) {
+      this.log.warn('AUTH_MOCK is ON: fixed OTP 123456 and demo personas are enabled. Never run a real deployment like this.')
+      return
+    }
+    // Demo persona users (some ADMIN) must not outlive mock mode: deactivating
+    // them kills their sessions at once, because every request checks User.active.
+    await this.prisma.user
+      .updateMany({ where: { mobile: { startsWith: 'demo-' }, active: true }, data: { active: false } })
+      .catch((e: Error) => this.log.error(`Could not deactivate demo users: ${e.message}`))
   }
 
   private get mock(): boolean {
@@ -68,6 +78,8 @@ export class AuthService implements OnModuleInit {
     // The response is identical whether or not the identity exists, so this
     // endpoint can't be used to probe who is registered.
     const user = this.mock ? null : await this.findUser(method, id)
+    // Hash a code either way so response time doesn't reveal registered numbers.
+    if (!this.mock && !user) await bcrypt.hash(String(randomInt(0, 1_000_000)), 10)
     if (this.mock || user) {
       const code = this.mock ? MOCK_OTP : String(randomInt(0, 1_000_000)).padStart(6, '0')
       await this.prisma.otp.create({
@@ -162,7 +174,7 @@ export class AuthService implements OnModuleInit {
     const citizen = own ?? (this.mock
       ? await this.prisma.citizen.findUnique({ where: { citizenId: DEMO_CITIZEN_ID }, include: { addresses: true } })
       : null)
-    return { citizen, role: user.role.toLowerCase(), permissions: ROLE_PERMISSIONS[user.role] }
+    return { citizen: citizen ? toCitizenDto(citizen) : null, role: user.role.toLowerCase(), permissions: ROLE_PERMISSIONS[user.role] }
   }
 
   private claimsFor(user: User, sid: string): JwtUser {
@@ -213,7 +225,7 @@ export class AuthService implements OnModuleInit {
     const mobile = `demo-${persona}`
     return this.prisma.user.upsert({
       where: { mobile },
-      update: {},
+      update: { active: true },
       create: { mobile, role: PERSONA_ROLE[persona], officerId: officer?.id },
     })
   }

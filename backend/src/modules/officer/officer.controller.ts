@@ -19,6 +19,7 @@ export class OfficerController {
 
   @Get('officer/queue') queue(@CurrentUser() user: JwtUser) { return this.officer.queue(user) }
   @Get('officer/stats') stats(@CurrentUser() user: JwtUser) { return this.officer.stats(user) }
+  @Get('officer/applications/:id') one(@CurrentUser() user: JwtUser, @Param('id') id: string) { return this.officer.one(id, user) }
 
   @Post('officer/applications/:id/action')
   action(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: OfficerActionDto) {

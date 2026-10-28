@@ -17,12 +17,12 @@ the frontend (no component code changes).
 
 ```bash
 cd backend
-# Secrets have no defaults; compose refuses to start without them.
-export POSTGRES_PASSWORD=$(openssl rand -hex 16) REDIS_PASSWORD=$(openssl rand -hex 16)
-export JWT_ACCESS_SECRET=$(openssl rand -hex 32)
+# Secrets have no defaults; compose refuses to start without them. Write them
+# ONCE: Postgres keeps the first password it was initialised with.
+[ -f .env ] || printf 'POSTGRES_PASSWORD=%s\nREDIS_PASSWORD=%s\nJWT_ACCESS_SECRET=%s\n' \
+  "$(openssl rand -hex 16)" "$(openssl rand -hex 16)" "$(openssl rand -hex 32)" > .env
 # Demo only: fixed OTP + Demo Mode personas, and seed an empty database.
-export AUTH_MOCK=true SEED_ON_BOOT=true
-docker compose up --build       # postgres + redis + backend
+AUTH_MOCK=true SEED_ON_BOOT=true docker compose up --build   # postgres + redis + backend
 ```
 
 On boot the backend applies committed migrations (`prisma migrate deploy`). It

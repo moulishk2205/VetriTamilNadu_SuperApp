@@ -40,12 +40,16 @@ export default function DemoMode() {
   const navigate = useNavigate()
   const loginAsPersona = useAuthStore((s) => s.loginAsPersona)
   const [busy, setBusy] = useState<Role | null>(null)
+  const [error, setError] = useState('')
 
   const enter = async (role: Role, home: string) => {
     setBusy(role)
+    setError('')
     try {
       await loginAsPersona(role)
       navigate(home)
+    } catch {
+      setError('Demo personas are switched off on this server (AUTH_MOCK). Sign in with OTP instead.')
     } finally {
       setBusy(null)
     }
@@ -68,6 +72,7 @@ export default function DemoMode() {
         </Card>
 
         <p style={{ fontSize: 12, fontWeight: 700, color: c.txt3, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>Enter as</p>
+        {error && <p role="alert" style={{ fontSize: 12.5, color: c.err, marginBottom: 10 }}>{error}</p>}
         {PERSONAS.map((p) => (
           <Card key={p.role} onClick={() => busy || enter(p.role, p.home)} style={{ marginBottom: 10, cursor: 'pointer' }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

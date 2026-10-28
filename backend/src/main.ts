@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { NestFactory } from '@nestjs/core'
+import type { NestExpressApplication } from '@nestjs/platform-express'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import type { NextFunction, Request, Response } from 'express'
 import { Logger } from 'nestjs-pino'
@@ -9,7 +10,7 @@ import { AppModule } from './app.module'
 import type { AppConfig } from './config/configuration'
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true })
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true })
   app.useLogger(app.get(Logger))
 
   const config = app.get(ConfigService)
@@ -18,6 +19,11 @@ async function bootstrap(): Promise<void> {
   const corsOrigin = config.get<AppConfig['corsOrigin']>('corsOrigin') ?? '*'
   const swaggerEnabled = config.get<AppConfig['swagger']>('swagger') === true
   const docsPath = `/${apiPrefix}/docs`
+
+  // Behind a load balancer, set TRUST_PROXY (e.g. 1 = one hop) so throttling
+  // and audit IPs use the client address, not the proxy's.
+  const trustProxy = process.env.TRUST_PROXY
+  if (trustProxy) app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy)
 
   // /health stays at the root for probes; everything else is under /api.
   app.setGlobalPrefix(apiPrefix, { exclude: ['health'] })

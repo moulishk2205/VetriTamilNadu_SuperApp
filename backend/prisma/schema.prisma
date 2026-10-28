@@ -1,0 +1,563 @@
+// Vetri Tamil Nadu — Digital Governance Platform
+// Prisma schema. Models mirror the frontend's domain contracts so the React app
+// swaps from MSW to this backend by changing only VITE_API_BASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+enum Role {
+  CITIZEN
+  OFFICER
+  DEPARTMENT
+  MLA
+  ADMIN
+  SUPPORT
+}
+
+enum AuthMethod {
+  OTP
+  AADHAAR
+  BIOMETRIC
+}
+
+enum ServiceMode {
+  DIGITAL
+  ASSISTED
+  EXTERNAL
+}
+
+enum ApplicationStage {
+  submitted
+  docVerification
+  officerAssigned
+  departmentQueue
+  inspection
+  remarks
+  escalation
+  approval
+  digitalSignature
+  certificateGeneration
+  walletDelivery
+  notified
+  completed
+  rejected
+  correctionRequested
+}
+
+enum ComplaintStatus {
+  submitted
+  assigned
+  inProgress
+  resolved
+  closed
+  escalated
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NotificationCategory {
+  application
+  complaint
+  scheme
+  document
+  system
+  reminder
+}
+
+enum VerificationStatus {
+  verified
+  pending
+  expired
+  revoked
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+// ─── Identity & access ─────────────────────────────────────────────────────────
+model User {
+  id           String    @id @default(uuid())
+  email        String?   @unique
+  mobile       String    @unique
+  passwordHash String?
+  role         Role      @default(CITIZEN)
+  active       Boolean   @default(true)
+  citizen      Citizen?  @relation(fields: [citizenId], references: [id])
+  citizenId    String?   @unique
+  officer      Officer?  @relation(fields: [officerId], references: [id])
+  officerId    String?   @unique
+  permissions  Permission[]
+  sessions     Session[]
+  refreshTokens RefreshToken[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  version      Int       @default(1)
+}
+
+model Permission {
+  id    String @id @default(uuid())
+  key   String
+  users User[]
+
+  @@unique([key])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Session {
+  id         String    @id @default(uuid())
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String
+  method     AuthMethod
+  device     String?
+  ip         String?
+  location   String?
+  lastSeenAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+}
+
+model Otp {
+  id         String   @id @default(uuid())
+  identifier String
+  codeHash   String
+  purpose    String   @default("login")
+  consumed   Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([identifier])
+}
+
+// ─── Citizen & geography ────────────────────────────────────────────────────────
+model Citizen {
+  id           String    @id @default(uuid())
+  citizenId    String    @unique // CAN — TN-2024-XXXX-8842
+  fullName     String
+  dob          String
+  gender       String
+  mobile       String
+  email        String?
+  aadhaarMasked String
+  district     String
+  taluk        String
+  state        String    @default("Tamil Nadu")
+  verified     Boolean   @default(false)
+  verifiedVia  String[]  @default([])
+  user         User?
+  addresses    Address[]
+  documents    Document[]
+  applications Application[]
+  complaints   Complaint[]
+  notifications Notification[]
+  timeline     TimelineEvent[]
+  conversations Conversation[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  version      Int       @default(1)
+}
+
+model Address {
+  id        String   @id @default(uuid())
+  citizen   Citizen  @relation(fields: [citizenId], references: [id])
+  citizenId String
+  kind      String   @default("current")
+  line      String
+  area      String
+  district  String
+  state     String   @default("Tamil Nadu")
+  pincode   String
+  lat       Float?
+  lng       Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model District {
+  id     String  @id @default(uuid())
+  name   String  @unique
+  taluks Taluk[]
+}
+
+model Taluk {
+  id         String   @id @default(uuid())
+  name       String
+  district   District @relation(fields: [districtId], references: [id])
+  districtId String
+  villages   Village[]
+
+  @@unique([districtId, name])
+}
+
+model Village {
+  id      String @id @default(uuid())
+  name    String
+  taluk   Taluk  @relation(fields: [talukId], references: [id])
+  talukId String
+}
+
+// ─── Departments, officers, MLA ─────────────────────────────────────────────────
+model Department {
+  id         String   @id @default(uuid())
+  code       String   @unique
+  name       String
+  category   String
+  officers   Officer[]
+  applications Application[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Officer {
+  id           String    @id @default(uuid())
+  name         String
+  designation  String
+  jurisdiction String
+  district     String
+  department   Department @relation(fields: [departmentId], references: [id])
+  departmentId String
+  user         User?
+  applications Application[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  version      Int       @default(1)
+}
+
+model Mla {
+  id           String @id @default(uuid())
+  name         String
+  constituency String @unique
+  district     String
+}
+
+// ─── Service catalog + workflow ─────────────────────────────────────────────────
+model ServiceCategory {
+  id       String    @id @default(uuid())
+  code     String    @unique
+  label    String
+  services Service[]
+}
+
+model Service {
+  id              String          @id @default(uuid())
+  code            String          @unique // REV-103, TRN-LL, …
+  slug            String          @unique // svc_income
+  name            String
+  nameTamil       String?
+  category        ServiceCategory @relation(fields: [categoryId], references: [id])
+  categoryId      String
+  department      String
+  mode            ServiceMode     @default(DIGITAL)
+  fee             String
+  govFee          String
+  serviceCharge   String
+  processingTime  String
+  validity        String
+  description     String
+  eligibility     String[]        @default([])
+  digitalFeatures String[]        @default([])
+  workflowId      String          @default("gov.standard.v1")
+  formId          String
+  producesDocumentType String?
+  externalUrl     String?
+  portalUrl       String?
+  sourceNote      String?
+  metadata        Json?           // full ServiceMeta payload for the frontend
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  version         Int             @default(1)
+}
+
+model Workflow {
+  id          String         @id @default(uuid())
+  code        String         @unique // gov.standard.v1
+  name        String
+  initial     String
+  steps       WorkflowStep[]
+}
+
+model WorkflowStep {
+  id         String   @id @default(uuid())
+  workflow   Workflow @relation(fields: [workflowId], references: [id])
+  workflowId String
+  stageId    String
+  label      String
+  actor      String
+  slaDays    Int?
+  terminal   Boolean  @default(false)
+  order      Int
+  nextStages String[] @default([])
+
+  @@unique([workflowId, stageId])
+}
+
+// ─── Applications ────────────────────────────────────────────────────────────────
+model Application {
+  id             String           @id @default(uuid())
+  referenceNo    String           @unique
+  serviceSlug    String
+  serviceName    String
+  citizen        Citizen          @relation(fields: [citizenId], references: [id])
+  citizenId      String
+  stage          ApplicationStage @default(submitted)
+  statusLabel    String           @default("Submitted")
+  department     Department?      @relation(fields: [departmentId], references: [id])
+  departmentId   String?
+  officer        Officer?         @relation(fields: [officerId], references: [id])
+  officerId      String?
+  slaDeadline    DateTime?
+  fields         Json             @default("{}")
+  documents      Json             @default("[]")
+  timeline       TimelineEvent[]
+  remarks        Comment[]
+  attachments    Attachment[]
+  payment        Payment?
+  certIssued     Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+  version        Int              @default(1)
+
+  @@index([citizenId])
+  @@index([stage])
+}
+
+model TimelineEvent {
+  id            String       @id @default(uuid())
+  citizen       Citizen      @relation(fields: [citizenId], references: [id])
+  citizenId     String
+  application   Application? @relation(fields: [applicationId], references: [id])
+  applicationId String?
+  year          String
+  title         String
+  subtitle      String
+  kind          String       // application | certificate | complaint | scheme | milestone
+  at            DateTime     @default(now())
+
+  @@index([citizenId])
+}
+
+model Comment {
+  id            String      @id @default(uuid())
+  application   Application @relation(fields: [applicationId], references: [id])
+  applicationId String
+  by            String
+  text          String
+  at            DateTime    @default(now())
+}
+
+// ─── Documents / wallet + storage ────────────────────────────────────────────────
+model Document {
+  id         String             @id @default(uuid())
+  citizen    Citizen            @relation(fields: [citizenId], references: [id])
+  citizenId  String
+  name       String
+  type       String
+  number     String             @unique
+  issuer     String
+  holderName String
+  dob        String?
+  validity   String
+  status     VerificationStatus @default(verified)
+  color      String             @default("#059669")
+  fileKey    String?
+  docVersion Int                @default(1)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  deletedAt  DateTime?
+
+  @@index([citizenId])
+}
+
+model Attachment {
+  id            String      @id @default(uuid())
+  application   Application @relation(fields: [applicationId], references: [id])
+  applicationId String
+  requirementId String
+  name          String
+  mime          String
+  sizeBytes     Int
+  source        String      @default("device")
+  storageKey    String?
+  createdAt     DateTime    @default(now())
+}
+
+// ─── Complaints ──────────────────────────────────────────────────────────────────
+model Complaint {
+  id           String          @id @default(uuid())
+  referenceNo  String          @unique
+  citizen      Citizen         @relation(fields: [citizenId], references: [id])
+  citizenId    String
+  category     String
+  description  String
+  priority     Priority        @default(MEDIUM)
+  status       ComplaintStatus @default(submitted)
+  department   String?
+  etaDays      Int?
+  ward         String?
+  area         String?
+  lat          Float?
+  lng          Float?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  deletedAt    DateTime?
+  version      Int             @default(1)
+
+  @@index([citizenId])
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────────
+model Notification {
+  id         String               @id @default(uuid())
+  citizen    Citizen?             @relation(fields: [citizenId], references: [id])
+  citizenId  String?
+  title      String
+  body       String
+  category   NotificationCategory @default(system)
+  priority   Priority             @default(MEDIUM)
+  read       Boolean              @default(false)
+  actionPath String?
+  icon       String?
+  color      String?
+  channel    String               @default("in-app")
+  createdAt  DateTime             @default(now())
+
+  @@index([citizenId])
+}
+
+// ─── Schemes ─────────────────────────────────────────────────────────────────────
+model Scheme {
+  id           String          @id @default(uuid())
+  name         String
+  /// Official Tamil name (2026 catalogue).
+  nameTamil    String?
+  department   String
+  benefit      String
+  benefitTamil String?
+  /// Announced budget allocation, where published.
+  budget       String?
+  purpose      String?
+  matchScore Int               @default(0)
+  color      String
+  rules      EligibilityRule[]
+  createdAt  DateTime          @default(now())
+}
+
+model EligibilityRule {
+  id       String  @id @default(uuid())
+  scheme   Scheme  @relation(fields: [schemeId], references: [id])
+  schemeId String
+  field    String
+  op       String
+  value    String
+}
+
+// ─── Payments ────────────────────────────────────────────────────────────────────
+model Payment {
+  id            String        @id @default(uuid())
+  application   Application?  @relation(fields: [applicationId], references: [id])
+  applicationId String?       @unique
+  citizenId     String
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("INR")
+  status        PaymentStatus @default(pending)
+  method        String?
+  gatewayRef    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+// ─── AI ──────────────────────────────────────────────────────────────────────────
+model Conversation {
+  id        String      @id @default(uuid())
+  citizen   Citizen     @relation(fields: [citizenId], references: [id])
+  citizenId String
+  messages  AiMessage[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model AiMessage {
+  id             String       @id @default(uuid())
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId String
+  role           String
+  text           String
+  intent         String?
+  plan           Json?
+  actions        Json?
+  at             DateTime     @default(now())
+}
+
+// ─── Platform ────────────────────────────────────────────────────────────────────
+model AuditLog {
+  id        String   @id @default(uuid())
+  actor     String
+  action    String
+  entity    String
+  entityId  String
+  note      String?
+  meta      Json?
+  at        DateTime @default(now())
+
+  @@index([entity, entityId])
+}
+
+model FeatureFlag {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  body      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Faq {
+  id       String @id @default(uuid())
+  question String
+  answer   String
+  category String @default("general")
+}
+
+model SupportTicket {
+  id        String   @id @default(uuid())
+  citizenId String?
+  subject   String
+  body      String
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

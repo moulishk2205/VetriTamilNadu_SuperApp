@@ -1,0 +1,42 @@
+/* App design tokens — copied from src/styles/theme.ts + src/app/desktop (Vetri TN). */
+:root{
+  --pri:#9B1B30; --priDk:#7A1526; --acc:#6B1D2A; --deep:#4E1220;
+  --sec:#D4A843; --secDk:#B8922E; --secLt:#E8C66A; --goldInk:#3A2A05;
+  --bg:#FFFFFF; --bgAlt:#F7F7FA; --card:#FFFFFF;
+  --txt:#1C1C1E; --txt2:#6B7280; --txt3:#9CA3AF; --bdr:#E5E7EB;
+  --ok:#059669; --warn:#D97706; --err:#DC2626; --info:#2563EB;
+  --ink:#0B0607;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--ink);
+  font-family:'Inter','Noto Sans Tamil',system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+.ta{font-family:'Noto Sans Tamil','Inter',sans-serif}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;letter-spacing:.02em}
+.num{font-variant-numeric:tabular-nums}
+.layer{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden}
+.abs{position:absolute}
+.plane{position:absolute;transform-origin:0 0;will-change:auto}
+
+/* ── app surfaces ───────────────────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--bdr);border-radius:14px}
+.panel{background:var(--card);border:1px solid var(--bdr);border-radius:14px;overflow:hidden}
+.panel-h{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--bdr);font-size:14.5px;font-weight:700;color:var(--txt)}
+.chip{display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:20px;white-space:nowrap}
+.chip.ok{color:var(--ok);background:#05966918}.chip.warn{color:var(--warn);background:#D9770618}.chip.info{color:var(--info);background:#2563EB18}
+.tile{display:flex;align-items:center;justify-content:center;border-radius:12px;background:#9B1B300D;color:var(--pri)}
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:10px;font-weight:600;font-size:13.5px;padding:10px 16px;border:1px solid var(--bdr);background:#fff;color:var(--txt)}
+.btn.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
+.btn.gold{background:var(--sec);color:var(--goldInk);border-color:var(--sec);font-weight:700}
+.overline{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--txt3)}
+
+/* masthead */
+.mast{width:1920px;position:absolute;left:0;top:0}
+.mast .strip{height:40px;background:var(--acc);display:flex;align-items:center;justify-content:space-between;padding:0 136px;color:rgba(255,255,255,.85);font-size:12px}
+.mast .bar{height:74px;background:var(--pri);display:flex;align-items:center;gap:18px;padding:0 136px;border-bottom:3px solid var(--sec);box-sizing:content-box}
+.mast .word{color:#fff;font-size:19px;font-weight:800;letter-spacing:-.3px;line-height:1.1}
+.mast .sub{color:rgba(255,255,255,.66);font-size:11px;letter-spacing:.3px;margin-top:3px}
+.mast .search{margin-left:28px;width:460px;height:38px;border-radius:12px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);display:flex;align-items:center;gap:10px;padding:0 14px;color:rgba(255,255,255,.55);font-size:13px}
+.mast .nav{height:47px;background:#fff;border-bottom:1px solid var(--bdr);display:flex;align-items:stretch;padding:0 122px}
+.mast .tab{display:flex;align-items:center;gap:8px;padding:0 16px;font-size:13.5px;font-weight:500;color:var(--txt2);position:relative}
+.mast .tab.on{color:var(--pri);font-weight:700}
+.mast .tab.on::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--pri)}

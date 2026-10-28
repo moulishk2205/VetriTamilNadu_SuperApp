@@ -1,0 +1,921 @@
+[
+ {
+  "subsystem": "Ask Vetri AI (src/features/ai + src/mocks/handlers/ai.ts + backend/src/modules/ai)",
+  "purpose": "Ask Vetri is a citizen assistant. It takes one free-text sentence in Tamil, English or both, works out which government services that life situation needs, puts them in dependency order (what has to come first), and returns three things: a Tamil headline, an English explanation built from the service catalogue (fee, processing time, why this step comes here), and up to 4 clickable cards that open the real service application. It also shows up to 4 proactive suggestions worked out from the citizen's own records (an expired certificate, age-based next steps, the property-tax rebate window, number of eligible schemes). It is deterministic code, not an LLM. docs/PHASE4.md line 13 says so directly: \"this build runs fully offline with no live LLM, so the pipeline is deterministic reasoning\". All of the life-event reasoning below runs in the frontend engine through the offline MSW mock backend (VITE_ENABLE_MSW=true, which is the 'vetri-offline' launch config and the mode used for every capture). The NestJS backend has its own, much simpler keyword AI.",
+  "capabilities": [
+   {
+    "name": "5-stage deterministic pipeline (runAskVetri)",
+    "what_it_really_does": "orchestrator.ts runAskVetri(text, raw, memory) runs extractIntent → buildContext → buildPlan → executePlan → compose, in that order. The stage names in the code comment and PHASE4.md are, verbatim: 'text → Intent Engine → Citizen Context → Planning Engine → Tool Orchestrator → Response Composer → reply (+ visible plan trace)', supported by 'Government Knowledge Graph + Life Event Engine + Memory'. Every stage is plain typed data: IntentFrame → CitizenContext → Plan{goal, steps[{tool, rationale}]} → ToolResult[] → ComposedReply{text, en, actions, plan, intent}. The MSW handler is a thin delegate: POST /api/ai/chat calls runAskVetri(text, rawState(), memory) with rawState = db.citizen, db.documents, the application records, db.schemes and the unread-notification count.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/ai/engine/orchestrator.ts",
+     "/Users/chandyfolder/vetri-app/src/features/ai/engine/types.ts",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/ai.ts",
+     "/Users/chandyfolder/vetri-app/docs/PHASE4.md"
+    ],
+    "visual_potential": "A horizontal 5-node pipeline (Intent Engine, Citizen Context, Planning Engine, Tool Orchestrator, Response Composer) with the citizen's sentence flowing in on the left and the Tamil headline plus cards coming out on the right. The knowledge layer (Knowledge Graph, Life Event Engine, Memory) sits underneath and feeds up into the planner. Label it 'deterministic reasoning engine', not 'AI model'."
+   },
+   {
+    "name": "Intent Engine: multi-event extraction from one sentence",
+    "what_it_really_does": "extractIntent() regex-matches the text against life-event triggers (en + ta) and a keyword index of 21 services. It returns ALL matching life events, in LIFE_EVENTS array order (not the order they appear in the sentence), plus language (en/ta/mixed via Tamil Unicode range), district entity (TN_DISTRICTS), reference numbers (APP|CMP|CRT-YYYY-XX-n), sentiment (empathetic/celebratory from event tone) and urgency. Kind precedence: lifeEvent > trackStatus > coverageQuery > documentQuery > schemeQuery > timelineQuery > apply/explainService > payment > navigate > smalltalk. Verified by actually running the code: 'I moved to Chennai after marriage and bought a house' → {kind:'lifeEvent', lifeEvents:['marriage','propertyPurchase','migration'], entities:{district:'Chennai'}, sentiment:'celebratory', language:'en'}. Tamil 'நான் நிலம் வாங்கினேன்' → lifeEvent propertyPurchase, language 'ta'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/ai/engine/intentEngine.ts",
+     "/Users/chandyfolder/vetri-app/src/features/ai/knowledge/lifeEvents.ts",
+     "/Users/chandyfolder/vetri-app/src/features/ai/knowledge/serviceGraph.ts"
+    ],
+    "visual_potential": "Type the sentence, then highlight the three trigger fragments as they match: 'moved to' → Migration, 'marri(age)' → Marriage, 'bought a house' → Property purchase. Each fragment lifts off as a chip carrying its Tamil label (இடமாற்றம், திருமணம், சொத்து வாங்குதல்). 'Chennai' gets tagged as a district entity."
+   },
+   {
+    "name": "Life Event Engine: 9 events with dependency-ordered service sequences",
+    "what_it_really_does": "LIFE_EVENTS holds 9 nodes. Each has en/ta labels, triggers, a tone, an ORDERED services[] list where the order encodes the dependencies, per-service dependency notes, and benefits. The composer walks each matched event's services in order, de-duplicates services across events (the first event's dependency note wins), and numbers them 1..N. Sequences, verbatim ids with resolved catalogue names: (1) bereavement 'Death in the family'/'குடும்பத்தில் இழப்பு' [empathetic]: svc_death Death Certificate → svc_legalheir Legal Heir Certificate → svc_patta Patta Transfer → svc_ration Ration Card (Smart Card). (2) marriage 'Marriage'/'திருமணம்' [celebratory]: svc_marriage Marriage Certificate → svc_ration Ration Card (Smart Card) → svc_residence Residence Certificate. (3) propertyPurchase 'Property / land purchase'/'சொத்து வாங்குதல்' [neutral]: svc_ec Encumbrance Certificate → svc_chitta Chitta / Patta Extract → svc_patta Patta Transfer → svc_proptax Property Tax Payment → svc_water Water Charges. (4) migration 'Moving / address change'/'இடமாற்றம்': svc_dl Driving Licence → svc_ration Ration Card (Smart Card) → svc_residence Residence Certificate. (5) birth 'New baby'/'குழந்தை பிறப்பு' [celebratory]: svc_birth Birth Certificate → svc_ration Ration Card (Smart Card). (6) vehiclePurchase 'Vehicle purchase'/'வாகனம் வாங்குதல்': svc_rctransfer RC Transfer → svc_echallan e-Challan Payment → svc_mvtax Vehicle Tax Payment. (7) education 'School / college admission'/'கல்வி சேர்க்கை': svc_nativity Nativity Certificate → svc_income Income Certificate → svc_community Community Certificate → svc_residence Residence Certificate. (8) retirement 'Retirement / senior citizen'/'ஓய்வு': svc_income Income Certificate → svc_legalheir Legal Heir Certificate. (9) farming 'Farming / agriculture'/'விவசாயம்': svc_adangal Adangal Extract (A-Register) → svc_chitta Chitta / Patta Extract → svc_patta Patta Transfer.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/ai/knowledge/lifeEvents.ts",
+     "/Users/chandyfolder/vetri-app/src/features/services/catalog/meta.ts"
+    ],
+    "visual_potential": "A constellation of 9 life-event nodes with Tamil labels. When one lights up it unfolds into its ordered chain of service tiles, joined by arrows annotated with the real dependency note, for example 'needs the Death Certificate first'. For the combined sentence, three chains merge and the duplicates (Ration Card, Residence Certificate) collapse into single tiles."
+   },
+   {
+    "name": "Government Knowledge Graph (derived from the real service catalogue)",
+    "what_it_really_does": "SERVICE_GRAPH is built when the module loads from SERVICE_META + FORMS (21 services). Each node has meta (name, nameTamil, fee, processingTime, authorities.issuing), document requirements, a keyword regex (en + ta), up to 5 related services (EXTRA_EDGES plus services that share a life event), and curated tips, commonMistakes and rejectionReasons. The fees and times in replies come straight from meta.ts, e.g. Encumbrance Certificate '₹116 + ₹5/yr', '2–5 working days', issuing 'Sub-Registrar (SRO)'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/ai/knowledge/serviceGraph.ts",
+     "/Users/chandyfolder/vetri-app/src/features/services/catalog/meta.ts",
+     "/Users/chandyfolder/vetri-app/src/features/services/catalog/forms.ts"
+    ],
+    "visual_potential": "A network graph of the 21 services with edges such as EC→Chitta→Patta→Property Tax. Hover cards show the real fee and SLA, e.g. 'Patta Transfer · ₹60 (transfer) · Full/Joint: 15 days'."
+   },
+   {
+    "name": "Planning Engine + visible reasoning trace",
+    "what_it_really_does": "buildPlan() never answers. It emits typed tool steps, and each step's rationale string becomes the 'plan' trace line. For lifeEvent the steps are: wallet.list 'Check which documents the citizen already holds', applications.list 'Check for in-flight applications to avoid duplicates', then one service.meta 'Expand the {eventId} event into its service sequence' per event, then navigate.build 'Prepare one action per recommended service'. The trace is returned in the API reply ('plan') and rendered ONLY in the Mobile Super App bubble (AIAssistant.jsx): 10px muted lines, each with a 9px green CheckCircle, above the Tamil text. DesktopAI.tsx drops reply.plan, so the desktop portal shows no trace.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/ai/engine/planner.ts",
+     "/Users/chandyfolder/vetri-app/src/features/ai/pages/AIAssistant.jsx",
+     "/Users/chandyfolder/vetri-app/src/features/ai/pages/DesktopAI.tsx"
+    ],
+    "visual_potential": "Checklist ticks appearing one by one: ✓ Check which documents the citizen already holds / ✓ Check for in-flight applications to avoid duplicates / ✓ Expand the marriage event... / ✓ Expand the propertyPurchase event... / ✓ Expand the migration event... / ✓ Prepare one action per recommended service. This is accurate to the Mobile Super App UI. On a desktop shot it has to be labelled as an overlay of the engine's real plan output."
+   },
+   {
+    "name": "Tool Orchestrator (8-tool registry)",
+    "what_it_really_does": "executePlan() dispatches to pure functions over the citizen context: 'wallet.list', 'wallet.coverage' (regex-matches the service's FORMS checklist against wallet documents and returns covered/requiredTotal/missing, with expiry detection from MM/YYYY validity), 'applications.list', 'applications.forService' (duplicate detection: active apps for that service), 'service.meta', 'schemes.match', 'timeline.predict' (future-need prediction), 'navigate.build'. Verified output for 'I need an income certificate': 'You already have APP-2026-IC-44821 in progress (In Progress) — track it instead of re-applying. Your Wallet already covers 3 of 5 required documents ... ⚠ Income Proof (Salary slip / IT return / PAN) (your Income Certificate IC-TN-2024-9912 has EXPIRED).'",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/ai/engine/toolExecutor.ts",
+     "/Users/chandyfolder/vetri-app/src/features/ai/engine/contextBuilder.ts"
+    ],
+    "visual_potential": "Tool-call pills (wallet.coverage, applications.forService) firing against the citizen's real wallet cards (DL-TN-2024-8842, BC-TN-2002-4421, IC-TN-2024-9912 stamped EXPIRED, RC-TN-CHN-7788). The duplicate-detection beat lands on the live reference APP-2026-IC-44821."
+   },
+   {
+    "name": "Response Composer: bilingual reply + action cards",
+    "what_it_really_does": "compose() builds the Tamil headline from a per-intent template (lifeEvent: '{labelTamil joined by \" + \"} — தேவையான சேவைகளை வரிசைப்படுத்தியுள்ளேன்:'). The English body starts with a tone prefix ('Congratulations! ' for celebratory, 'My deepest condolences. I will handle the paperwork so you don’t have to think about it. ' for empathetic) and continues with numbered '{n}. {name} ({fee}, {processingTime}) — {dependency}', then 'Also check: {benefits}.', then 'I sequenced these by dependency — start from the top. Your Wallet already holds 4 verified documents I can reuse across these.' Action cards are service cards {label: meta.name, screen: 'service/{id}', kind:'apply'}, capped at 4. Clicking one navigates to the real /service/:id application flow.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/ai/engine/responseComposer.ts",
+     "/Users/chandyfolder/vetri-app/src/hooks/useAppNavigation.ts",
+     "/Users/chandyfolder/vetri-app/src/app/router/AppRouter.tsx"
+    ],
+    "visual_potential": "The Tamil headline types on first (the hero line), the English steps cascade beneath, then 4 crimson-outlined pill buttons with arrow icons slide in. Click 'Encumbrance Certificate →' and cut to the real service form."
+   },
+   {
+    "name": "Proactive suggestions (computeProactive)",
+    "what_it_really_does": "GET /api/ai/suggestions runs timeline.predict over live state and returns the first 4 predictions. Rules: every expired wallet document → '{name} ({number}) has expired — renewal recommended'; pending corrections; no DL and age>=18; age>=21 with no marriage document; a date-aware property-tax line (OPEN in April/October, otherwise 'opens April 1'/'opens October 1'); scheme count. For the demo citizen (DOB 22 May 2002, holds a DL, IC expired 03/2025, 9 schemes) in October the 4 lines are exactly as captured in citizen__ai.png. Desktop shows them under 'Suggested for you' with Lightbulb icons. Mobile shows them as chips under 'Ask Vetri noticed', only before the first message.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/ai/engine/orchestrator.ts",
+     "/Users/chandyfolder/vetri-app/src/features/ai/engine/toolExecutor.ts",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__ai.png"
+    ],
+    "visual_potential": "The four suggestion rows fade in one by one in the right rail. The expired-certificate number and the 'OPEN' rebate window are the strongest 'it already knows me' beats."
+   },
+   {
+    "name": "Citizen memory + voice (Mobile Super App only)",
+    "what_it_really_does": "useCitizenMemory (zustand persist key 'vetri.ai.memory') counts service-card taps and the last 10 intents. The intent engine re-sorts matched services by tap count. Only AIAssistant.jsx sends memory.snapshot() and records taps; DesktopAI does neither. Voice uses the browser Web Speech API (rec.lang 'ta-IN' or 'en-IN' from the UI language). Starting the mic or sending a new message cancels any TTS in progress, and replies to voice input are spoken aloud. The transcript persists separately under 'vetri.ai' (last 30 messages).",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/ai/memory/citizenMemory.ts",
+     "/Users/chandyfolder/vetri-app/src/features/ai/pages/AIAssistant.jsx",
+     "/Users/chandyfolder/vetri-app/src/hooks/useVoice.ts",
+     "/Users/chandyfolder/vetri-app/src/store/aiStore.ts"
+    ],
+    "visual_potential": "Mobile phone frame: tap the mic, the header status changes 'Online' → 'Listening…', speak Tamil, the reply is read aloud. Only the mobile experience can show this; the desktop page has no mic."
+   }
+  ],
+  "real_data": [
+   "PIPELINE (orchestrator.ts comment / PHASE4.md): \"text → Intent Engine → Citizen Context → Planning Engine → Tool Orchestrator → Response Composer → reply (+ visible plan trace)\"; knowledge layer: \"Government Knowledge Graph + Life Event Engine + Memory\"",
+   "TOOLS (types.ts): 'wallet.list' | 'wallet.coverage' | 'applications.list' | 'applications.forService' | 'service.meta' | 'schemes.match' | 'timeline.predict' | 'navigate.build'",
+   "Q1 \"I bought land\" (actual code output, MSW mode). intent: \"lifeEvent:propertyPurchase\"",
+   "Q1 Tamil headline (text): \"சொத்து வாங்குதல் — தேவையான சேவைகளை வரிசைப்படுத்தியுள்ளேன்:\"",
+   "Q1 English (en): \"1. Encumbrance Certificate (₹116 + ₹5/yr, 2–5 working days) — due diligence first — search back to 1987 before you register 2. Chitta / Patta Extract (Free, Instant) 3. Patta Transfer (₹60 (transfer) · ₹25 (extracts), Full/Joint: 15 days · Subdivision: 30 days) — mutation after the registered sale deed 4. Property Tax Payment (Calculated dynamically, Instant) — name change follows the patta mutation 5. Water Charges (Fixed tax + volumetric charge, Instant) — new connection / name transfer after ownership is recorded Also check: First-time buyer stamp-duty concessions where applicable. I sequenced these by dependency — start from the top. Your Wallet already holds 4 verified documents I can reuse across these.\"",
+   "Q1 reasoning trace (plan): [\"Check which documents the citizen already holds\", \"Check for in-flight applications to avoid duplicates\", \"Expand the propertyPurchase event into its service sequence\", \"Prepare one action per recommended service\"]",
+   "Q1 action cards: \"Encumbrance Certificate\" → service/svc_ec; \"Chitta / Patta Extract\" → service/svc_chitta; \"Patta Transfer\" → service/svc_patta; \"Property Tax Payment\" → service/svc_proptax (all kind 'apply'; Water Charges is step 5 but gets no card because of the 4-card cap)",
+   "Q2 \"I moved to Chennai after marriage and bought a house\". intent: \"lifeEvent:marriage+propertyPurchase+migration\"; extracted district: 'Chennai'; sentiment 'celebratory'",
+   "Q2 Tamil headline: \"திருமணம் + சொத்து வாங்குதல் + இடமாற்றம் — தேவையான சேவைகளை வரிசைப்படுத்தியுள்ளேன்:\"",
+   "Q2 English: \"Congratulations! 1. Marriage Certificate (₹100 (HMA) / ₹150 (SMA) + ₹100 appointment, HMA: same-day post-verification · SMA: 30-day notice period) 2. Ration Card (Smart Card) (Free (Gov ₹0), New card: up to 60 days) — spouse must first be removed from their parental card (NFSA de-duplication) 3. Residence Certificate (₹60, 7–15 days) — needed if the couple sets up a new household 4. Encumbrance Certificate (₹116 + ₹5/yr, 2–5 working days) — due diligence first — search back to 1987 before you register 5. Chitta / Patta Extract (Free, Instant) 6. Patta Transfer (₹60 (transfer) · ₹25 (extracts), Full/Joint: 15 days · Subdivision: 30 days) — mutation after the registered sale deed 7. Property Tax Payment (Calculated dynamically, Instant) — name change follows the patta mutation 8. Water Charges (Fixed tax + volumetric charge, Instant) — new connection / name transfer after ownership is recorded 9. Driving Licence (LLR ₹200 · DL ₹700 (single) / ₹1,000 (dual), LLR: same day · DL: after 30-day hold + driving test) — address change on the licence via Sarathi Also check: Marriage assistance schemes (Social Welfare); Name-change gazette if applicable; First-time buyer stamp-duty concessions where applicable. I sequenced these by dependency — start from the top. Your Wallet already holds 4 verified documents I can reuse across these.\"",
+   "Q2 reasoning trace: [\"Check which documents the citizen already holds\", \"Check for in-flight applications to avoid duplicates\", \"Expand the marriage event into its service sequence\", \"Expand the propertyPurchase event into its service sequence\", \"Expand the migration event into its service sequence\", \"Prepare one action per recommended service\"]",
+   "Q2 action cards: \"Marriage Certificate\" → service/svc_marriage; \"Ration Card (Smart Card)\" → service/svc_ration; \"Residence Certificate\" → service/svc_residence; \"Encumbrance Certificate\" → service/svc_ec",
+   "Q2 merge logic: 3 events × (3+5+3) = 11 services; migration's Ration Card and Residence Certificate are de-duplicated (marriage's dependency notes kept) → 9 numbered steps",
+   "Bereavement \"My father passed away\" (verified output): headline \"குடும்பத்தில் இழப்பு — தேவையான சேவைகளை வரிசைப்படுத்தியுள்ளேன்:\"; en starts \"My deepest condolences. I will handle the paperwork so you don’t have to think about it. 1. Death Certificate (Free within 21 days, ≤ 21 days: automatic · delayed: per authorisation) 2. Legal Heir Certificate (₹60, 15–30 days) — needs the Death Certificate first — every surviving heir must be listed (omission is an offence) ...\"; cards Death Certificate / Legal Heir Certificate / Patta Transfer / Ration Card (Smart Card)",
+   "Dependency notes verbatim (lifeEvents.ts): svc_ec 'due diligence first — search back to 1987 before you register'; svc_patta (property) 'mutation after the registered sale deed'; svc_proptax 'name change follows the patta mutation'; svc_water 'new connection / name transfer after ownership is recorded'; svc_ration (marriage) 'spouse must first be removed from their parental card (NFSA de-duplication)'; svc_residence (marriage) 'needed if the couple sets up a new household'; svc_dl (migration) 'address change on the licence via Sarathi'; svc_birth 'register within 21 days — it is free; needs the RCH/PICME ID'; svc_rctransfer 'used vehicle: transfer RC via Forms 29/30 — transfer insurance simultaneously or claims are denied'; svc_nativity 'state-quota seats need Nativity (5-year residence), not just Residence'; svc_adangal 'crop-loss claims and subsidies verify cultivation via the Adangal'",
+   "Proactive suggestions (citizen__ai.png and code output, captured in October): \"Income Certificate (IC-TN-2024-9912) has expired — renewal recommended\" | \"Marriage registration and related updates are common next steps at this age\" | \"Property-tax incentive window is OPEN — pay this month for the 5% rebate\" | \"Eligible for 9 welfare schemes based on your profile\"; hidden prompts: \"Help me with income\", \"Help me with marriage\", \"Help me with proptax\", and the 4th row reuses its own text as the prompt",
+   "Off-window variants of the tax line (toolExecutor.ts): \"Property-tax 5% incentive window opens April 1\" (Nov–Mar) / \"Property-tax 5% incentive window opens October 1\" (May–Sep)",
+   "\"What Vetri can see\" panel (DesktopAI.tsx): \"Your verified profile, your applications and their stages, the documents in your locker, and the welfare catalogue. Answers are generated from your own records — nothing is shared outside the platform.\" plus footer with ShieldCheck: \"Conversation stored on this device only.\"",
+   "Desktop page strings: title \"Ask Vetri\"; subtitle \"Your government assistant. Ask about any service, application or scheme — in Tamil or English.\"; empty state \"Vanakkam Chandramoulishwarar\" / \"Ask about applying for a certificate, the status of an application, your documents, or which welfare schemes you may be eligible for.\"; placeholder \"Ask about a service, application, document or scheme…\"; button \"Send\"; loading \"Vetri is thinking…\"; \"Clear conversation\"; panels \"Suggested for you\", \"What Vetri can see\", \"Try asking\"",
+   "Try asking chips: \"What is the status of my applications?\" | \"Which schemes am I eligible for?\" | \"How do I apply for an Income Certificate?\" | \"What documents are in my locker?\"",
+   "Mobile AIAssistant.jsx strings: header \"Vetri AI\" with status \"Online\" / \"Listening…\"; greeting \"வணக்கம்! நான் உங்கள் அரசு AI உதவியாளர்.\" / \"Hello! I'm your government AI assistant.\"; suggestions label \"Ask Vetri noticed\"; placeholder \"Type in Tamil or English...\"",
+   "Demo citizen (src/mocks/db.ts): 'Chandramoulishwarar K', citizenId 'TN-2024-XXXX-8842', DOB '22 May 2002', district 'Chennai', taluk 'Mylapore'",
+   "Wallet (db.ts): 'Driving License' DL-TN-2024-8842 valid 12/2029; 'Birth Certificate' BC-TN-2002-4421 Lifetime; 'Income Certificate' IC-TN-2024-9912 valid 03/2025 (EXPIRED); 'Ration Card' RC-TN-CHN-7788 Active",
+   "Live applications (applications.ts seed): APP-2026-IC-44821 Income Certificate, stage 'inspection', 'In Progress', SLA 3 days; APP-2026-CC-44903 Community Certificate, stage 'approval', 'In Progress', SLA 2 days",
+   "Income-cert duplicate detection reply (verified): headline \"வருமானச் சான்றிதழ் — உங்கள் ஆவணங்களைச் சரிபார்த்தேன்:\"; en begins \"You already have APP-2026-IC-44821 in progress (In Progress) — track it instead of re-applying.\"; cards \"Track Application\", \"Community Certificate\", \"Nativity Certificate\"",
+   "Tamil life-event labels: குடும்பத்தில் இழப்பு, திருமணம், சொத்து வாங்குதல், இடமாற்றம், குழந்தை பிறப்பு, வாகனம் வாங்குதல், கல்வி சேர்க்கை, ஓய்வு, விவசாயம்",
+   "Existing flow captures of these exact replies (3840x2160, desktop): /Users/chandyfolder/vetri-app/motion-studio/captures/raw/flows/ai_land_view.png, ai_marriage_house_view.png, ai_father_view.png, ai_income_view.png (+ full-page versions without _view)"
+  ],
+  "strongest_moments": [
+   "The one-sentence, three-event moment. The citizen types 'I moved to Chennai after marriage and bought a house' and the Tamil headline 'திருமணம் + சொத்து வாங்குதல் + இடமாற்றம் — தேவையான சேவைகளை வரிசைப்படுத்தியுள்ளேன்:' appears with 9 dependency-ordered steps and 4 action cards. It is the clearest proof of reasoning beyond keyword-to-form lookup, and it is already captured in motion-studio/captures/raw/flows/ai_marriage_house_view.png.",
+   "The dependency chain for 'I bought land': Encumbrance Certificate ('search back to 1987 before you register') → Chitta / Patta Extract → Patta Transfer ('after the registered sale deed') → Property Tax Payment → Water Charges. Five tiles with real ₹ fees and SLAs, animated as a sequenced path. Captured in ai_land_view.png.",
+   "The reasoning-trace ticks (✓ Check which documents the citizen already holds … ✓ Expand the migration event into its service sequence). These are the engine's real plan strings, and the Mobile Super App renders them as green CheckCircle lines. Use the mobile experience for an authentic shot, or label a desktop overlay as the engine's plan output.",
+   "The 'it already knows me' rail in citizen__ai.png: 'Income Certificate (IC-TN-2024-9912) has expired — renewal recommended' and 'Property-tax incentive window is OPEN — pay this month for the 5% rebate'. Both are computed from the citizen's wallet and today's date.",
+   "Duplicate detection for 'I need an income certificate': 'You already have APP-2026-IC-44821 in progress (In Progress) — track it instead of re-applying.' and a 'Track Application' card in place of Apply. It stops a duplicate filing, which is a governance-relevant beat for a Minister.",
+   "Clicking an action card (e.g. 'Encumbrance Certificate →') goes to the real /service/svc_ec application flow. That connects the answer to an actual service the citizen can file."
+  ],
+  "honesty_flags": [
+   "NO LIVE LLM. docs/PHASE4.md line 13: 'this build runs fully offline with no live LLM, so the pipeline is deterministic reasoning'. Matching is regex triggers plus keyword indexes; the replies are filled-in templates (the composer interpolates catalogue data into fixed sentence patterns such as 'I sequenced these by dependency — start from the top.'). Do not call it generative AI, a language model, or 'understanding'. 'Deterministic reasoning engine' / 'rule-based life-event engine' is accurate. responseComposer.ts is the documented place a model could be swapped in later; that is a roadmap item, not something that exists.",
+   "TWO DIFFERENT BACKENDS. The life-event engine runs only in the frontend through MSW (offline mode, VITE_ENABLE_MSW=true, the 'vetri-offline' launch config used for every capture). The repo's .env.local defaults to the NestJS backend (VITE_ENABLE_MSW=false), and backend/src/modules/ai/ai.service.ts is a simpler keyword classifier (intents greeting/track/wallet/apply/scheme/complaint/help/fallback) with no life events. In that mode 'I bought land' and the marriage/house sentence both fall to the 'fallback' reply: 'I want to make sure I help correctly, ...'. Film only the offline/MSW behaviour, and do not claim the server runs the life-event engine. backend/src/ai/ is an empty directory.",
+   "The desktop portal (DesktopAI.tsx) does NOT render the reasoning trace. It discards reply.plan and shows only the Tamil headline (14px), English body (12.5px, 72% opacity) and action buttons. The ✓ trace exists only in the Mobile Super App (AIAssistant.jsx). Any desktop shot with trace lines is a composited overlay of real engine output and should not be presented as the desktop UI.",
+   "PHASE4.md is out of date on the flagship example. It says '7-step merged plan ... 3 action cards' (Marriage → Ration → Residence → EC → Chitta → Patta → Property Tax). The current code produces 9 numbered steps (it adds Water Charges and Driving Licence) and 4 action cards, and the capture matches the code. Quote the code/capture, not the doc.",
+   "The English reply renders as one dense run-on paragraph (numbering inline, '1. … 2. …', no line breaks). Laying it out as a vertical list in the film reformats the text; the content is real but the layout is not the app's. The 4-card cap means steps 5–9 have no cards.",
+   "Life events are listed in LIFE_EVENTS array order, not the order the user mentions them. 'moved to Chennai after marriage' still yields marriage → property → migration.",
+   "Some trace lines overstate what happens. For life events, the 'Check for in-flight applications to avoid duplicates' result is never consulted by the composer (no dedup against live apps on this path). The 'wallet.list' result is used only as a count ('Your Wallet already holds 4 verified documents'), and that count includes the expired Income Certificate. Real duplicate detection exists only on the single-service path (applyService/coverageQuery).",
+   "Computed but never shown: entities.district ('Chennai' is extracted but unused), urgency, futureRecommendations and rejectionReasons. Do not show 'Vetri recommends next: Voter-ID update…' etc. as on-screen output.",
+   "Scheme 'match %' values (e.g. PM Kisan Samman Nidhi 95%, Annanin Seer Scheme 92%) are static seed values in schemes2026.ts. schemes.match just returns ctx.schemes and does no scoring. 'Eligible for 9 welfare schemes' is simply the length of the catalogue.",
+   "Clicking the suggestion rows sends generic prompts ('Help me with income', 'Help me with proptax') that resolve to the smalltalk intent and a generic reply ('நான் உங்கள் அரசு உதவியாளர். இவை உதவலாம்:' + 'I can start any government service…'). The Try-asking chip 'What documents are in my locker?' also falls to smalltalk. Do not film these as targeted answers. 'Help me with marriage' does trigger the marriage life event.",
+   "The suggestions depend on the date: 'window is OPEN' appears only in April/October (the capture was taken in October). Rendering live in another month changes the line to 'opens April 1' or 'opens October 1'.",
+   "The wallet-coverage matcher is regex-based and has false positives. 'Self-Declaration (auto-generated)' is 'covered by' Ration Card (because 'decla-ration' contains 'ration'), and Aadhaar requirements are 'covered by' the Driving License. Avoid close-ups that present coverage as exact.",
+   "Memory personalisation and voice (Tamil ta-IN speech) are Mobile Super App only. DesktopAI sends no memory snapshot and has no mic. Voice uses the browser Web Speech API, not a Vetri speech model.",
+   "'Conversation stored on this device only' is true for the transcript (localStorage 'vetri.ai'). In offline mode the query never leaves the browser; in NestJS mode the text is POSTed to the platform's own server."
+  ],
+  "notes": "I ran the real engine with tsx against the same state the MSW handler injects (scratchpad script /private/tmp/claude-501/-Users-chandyfolder-vetri-app/35c0196d-d51f-4191-a478-180f2c547235/scratchpad/run-ai.ts). Every quoted reply, trace and card above is actual output, and it matches the existing flow captures in /Users/chandyfolder/vetri-app/motion-studio/captures/raw/flows/ (ai_land*, ai_marriage_house*, ai_father*, ai_income*), produced by /Users/chandyfolder/vetri-app/motion-studio/tools/capture-flows.mjs at 1920x1080 @2x against the vetri-offline server (port 5179). The only reasoning-trace UI is in the Mobile Super App (/ai with variant 'mobile', chosen via the 'Mobile Super App' card on the selector screen). No mobile AI capture exists yet; to get an authentic trace shot, extend capture-flows.mjs to pick 'Mobile Super App' and send the same prompts (the mobile input placeholder is 'Type in Tamil or English...'). A Tamil-input variant also works for real: 'நான் நிலம் வாங்கினேன்' returns the same property sequence with language 'ta'. Suggested 20s beat: type the marriage/house sentence → three trigger chips lift off → the Tamil headline → the 9-step chain merges with duplicates collapsing → 4 cards → click into the real service. Caption it 'deterministic, offline reasoning over the citizen's own records'. Key files: /Users/chandyfolder/vetri-app/src/features/ai/engine/{orchestrator,intentEngine,planner,toolExecutor,responseComposer,contextBuilder}.ts, /Users/chandyfolder/vetri-app/src/features/ai/knowledge/{lifeEvents,serviceGraph}.ts, /Users/chandyfolder/vetri-app/src/features/ai/pages/{DesktopAI.tsx,AIAssistant.jsx}, /Users/chandyfolder/vetri-app/src/mocks/handlers/ai.ts, /Users/chandyfolder/vetri-app/backend/src/modules/ai/ai.service.ts, /Users/chandyfolder/vetri-app/docs/PHASE4.md."
+ },
+ {
+  "subsystem": "Governance portals + transparency (Officer, Department, MLA, Super Admin, citizen District Scorecard / MLA Dashboard, analytics API, chart kit)",
+  "purpose": "This is the government-facing side of Vetri TN. One login screen (/demo, titled \"Presentation Mode\") lets you enter as any of five roles: Citizen, Officer, Department, MLA or Super Admin. Each role lands in a portal protected by role-based permissions (RBAC).\n- An Officer works a queue of citizen applications. Approve, Reject, Correction, Escalate and Transfer are all legal moves in the workflow engine, and every move writes an audit entry and sends the citizen a notification.\n- A Department head sees an operational dashboard.\n- An MLA sees analytics for their constituency (Mylapore), split into five sections, with a ward heat map and an auto-advancing presentation mode.\n- The Super Admin sees platform counts, the health of 14 integration adapters, feature flags, a broadcast form, client logs and the audit trail.\n- Citizens get read-only transparency pages (/district, /mla) built from the same analytics data.\nIn the offline build every number comes from MSW mock handlers. They are seeded \"charter-plausible\" figures plus a small live offset taken from the 2 seeded applications.",
+  "capabilities": [
+   {
+    "name": "Officer Portal dashboard (/officer)",
+    "what_it_really_does": "Header shows the officer from the queue response: 'Tmt. R. Kalaivani' / 'Revenue Inspector · Mylapore Taluk' (OFFICERS[0] in MSW). There are 6 tiles. Pending, Due Today, High Priority, Escalated and Corrections are counted live from the application records (2 / 0 / 2 / 0 / 0 at seed). 'Done (month)' is a static 47. The Work Queue lists every application record; the code does not filter by jurisdiction. At seed it holds 'Income Certificate APP-2026-IC-44821' (SLA: 3 day(s) at this stage, In Progress) and 'Community Certificate APP-2026-CC-44903' (SLA: 2 day(s) at this stage, In Progress). The 'Daily Performance' card shows static values: Avg Processing 4.2d, Approval Rate 92%, Citizen Rating 4.6/5, SLA Compliance 96%, Dept Rank #3. Footer reads 'Metrics update live with every action you take'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/officer/pages/OfficerPortal.tsx",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/officer.ts",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/applications.ts",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/officer__officer.png"
+    ],
+    "visual_potential": "Maroon header band with a shield icon and the officer's name. A 3x2 tile grid where the live counters could tick down after an action. Two queue cards with monospace reference numbers and orange 'In Progress' pills. A clean key/value performance list. Works well as a push-in from the queue card into the review screen."
+   },
+   {
+    "name": "Application Review: Approve & Issue flow (/officer/app/:id)",
+    "what_it_really_does": "Case header shows the service name, reference number, department ('Revenue & Disaster Management Department' for Income) and a status pill. Below it: citizen fields (fullName 'Chandramoulishwarar K', purpose 'Educational Concession'), the submitted-documents list (seeded apps show 'No documents attached (seeded application)'; citizen-submitted apps show '· verified Wallet copy' or '· uploaded'), a vertical workflow timeline with done/current/pending dots, and remarks. A remarks textarea ('Add remarks (recorded on the audit trail)…') sits above 5 action cards: 'Approve & Issue' ('eSign (placeholder) → generate certificate → deliver to Wallet'), 'Request Correction', 'Escalate' ('Escalate to Revenue Divisional Officer (RDO)' for Income), 'Transfer' and 'Reject'. Clicking a card arms it and shows a 'Confirm' button. On confirm, MSW walks legal transitions one at a time: inspection → remarks → approval → digitalSignature → certificateGeneration → walletDelivery (pushes certificate CRT-2026-IC-44821 to the Wallet with a 'Certificate Ready' notification) → notified → completed. It then writes audit 'approve+issue' and the citizen notification 'Income Certificate APP-2026-IC-44821 approved by Tmt. R. Kalaivani. Certificate issued to your Wallet.' The screen ends on 'Case closed — certificate issued and delivered to the citizen's Wallet.' Reject, Correction and Escalate find their target stage with a BFS over the transition graph. If no legal path exists the API returns 409 and the UI shows 'Action not permitted from the current stage.' Transfer reassigns to another officer, for example '→ Thiru. S. Murugesan'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/officer/pages/OfficerReview.tsx",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/officer.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/workflow/definitions.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/workflow/engine.ts",
+     "/Users/chandyfolder/vetri-app/src/features/services/catalog/meta.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/modules/officer/officer.service.ts"
+    ],
+    "visual_potential": "The hero governance beat: the 'Approve & Issue' card gets a green border, Confirm is pressed, the timeline dots fill green from Inspection down to Completed, the status pill turns to Completed, and the 'Case closed' banner appears. Cut to the citizen Wallet or notification for cause and effect. No capture of this screen exists, so record it live (use APP-2026-IC-44821)."
+   },
+   {
+    "name": "Audit trail",
+    "what_it_really_does": "Every officer action unshifts an entry {actor, action, entity:'application', entityId: referenceNo, at, note} into auditLog. MSW actions are 'approve+issue', 'reject', 'request-correction', 'escalate' and 'transfer'. The seed has one entry: actor 'system', action 'seed', entityId 'vetri', note 'Demo data initialised'. The Admin 'Audit' tab renders up to 25 rows as '<action> · <entityId>' / '<actor> — <note>' / en-IN timestamp. The actor string format is 'Tmt. R. Kalaivani (Revenue Inspector)'. The backend persists the same entries to the Prisma auditLog table.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/officer.ts",
+     "/Users/chandyfolder/vetri-app/src/features/admin/pages/AdminPortal.tsx",
+     "/Users/chandyfolder/vetri-app/backend/src/modules/officer/officer.service.ts"
+    ],
+    "visual_potential": "A ledger-style list with a scroll icon per row and a monospace reference number. Show it right after the approval so the new 'approve+issue · APP-2026-IC-44821' row appears at the top: an accountability beat for a Minister. Not captured, so record the Admin > Audit tab after doing an approval in the same session."
+   },
+   {
+    "name": "Department Dashboard (/department)",
+    "what_it_really_does": "Title 'Revenue & Disaster Management', subtitle 'Operational dashboard · Chennai District'. 9 StatTiles, MSW values at seed: Today 36 (34+2 live), This Month 1180, Pending 128 (126+2), Approved 982, Rejected 41, Avg SLA 4.6d, Overdue 17, Escalations 9, On-time 96% (hardcoded in JSX). Below them: Monthly Trend LineChart (Feb 820, Mar 940, Apr 1010, May 1105, Jun 1160, Jul 1182), Most Requested Services BarChart (Income 412, Community 318, Patta 214, Birth 156, Death 80), District Comparison HBars (Chennai 1180, Coimbatore 964, Madurai 842, Trichy 733, Salem 651), Top Officers (1 Tmt. R. Kalaivani, Revenue Inspector, 63, SLA 98%; 2 Thiru. S. Murugesan, Deputy Tahsildar, 51, SLA 96%; 3 Tmt. P. Anitha, Zonal Officer, 44, SLA 93%) and Needs Attention (Thiru. D. Prakash, Deputy Tahsildar, 12, SLA 71% in red).",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/department/pages/DepartmentDashboard.tsx",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/analytics.ts",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/department__department.png",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/raw/desktop/department__department.full.png"
+    ],
+    "visual_potential": "The colour-coded 3x3 tile grid reads well (green 982, red 41/17, orange 128/9, green 96%). The District Comparison HBars and the officer leaderboard (green SLA versus red 71%) are clean. Avoid the LineChart and BarChart here: at desktop width their labels are horizontally stretched and illegible."
+   },
+   {
+    "name": "MLA Portal (/mla-portal): five sections, heat map, presentation mode, PDF",
+    "what_it_really_does": "Header 'Mylapore Constituency' / 'Chennai District · Assembly segment' with Printer (window.print), Play/Pause (presentation mode) and Logout icons. Section chips: Overview, Trends, Services, People, Wards. Overview: StatTiles Submitted 4,233, Completed 3,867, Pending 298, Avg Resolution 5.2d, Satisfaction 4.3/5, Scheme Uptake 78%, plus Department Performance HBars (Revenue 94%, Civil Supplies 91%, GCC 87%, Transport 84%, Registration 82%). Trends: 'Applications — Monthly Trend' LineChart (520, 588, 641, 702, 745, 792) and 'Top Complaints' BarChart (Road Damage 214, Water Supply 168, Streetlight 122, Garbage 96). Services: 'Most Requested Services' BarChart (Income Cert 1240, Community 918, Ration Card 704, Patta 512, Birth Cert 431) and the 'Service Demand by Ward (heat map)' HeatGrid. People: 'Who is being served' Donut (Women 1832, Youth / Students 1114, Senior citizens 689, Farmers 402, Disabled 194; centre total 4231) and Beneficiary Groups HBars. Wards: 'Ward Comparison — applications served' HBars (Ward 121 312, 122 287, 123 341, 124 268, 125 224, 126 373) and the callout 'Ward 126 (Mylapore) leads service uptake this quarter.' Presentation mode runs setInterval 5000ms, cycling sections (a 25s loop), with footer 'Presentation mode — auto-advancing every 5s'. Idle footer: 'Tap sections to explore · ▶ for presentation mode · print icon exports PDF'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/mla/pages/MlaPortal.tsx",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/analytics.ts",
+     "/Users/chandyfolder/vetri-app/src/components/charts/index.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/mla__mla-portal.png"
+    ],
+    "visual_potential": "Presentation mode is the most cinematic real feature: press Play and the chips advance by themselves every 5s, so a screen recording gives free 'auto-pilot' cuts. The HeatGrid (maroon rgba(155,27,48,α) cells, number in each cell, peak 58 at Income×W126) suits a cell-by-cell reveal. The Donut and green department-performance bars animate well. Only Overview is captured, so record the other four sections live."
+   },
+   {
+    "name": "Super Admin Portal (/admin)",
+    "what_it_really_does": "Header 'Platform Administration' / 'Vetri TN · Super Admin'. Tabs: Overview, Manage, Flags, Broadcast, Logs, Audit. Overview StatTiles are computed from real registries: Services 21 (SERVICE_META.length), Districts 38 (TN_DISTRICTS.length), Roles 5 (ROLE_PERMISSIONS), Workflow Stages 15 (STANDARD_GOV_WORKFLOW), Integrations 14 (keys returned by gateway.healthAll()). Uptime 99.9% is a hardcoded string. 'API & Integration Health' lists 14 rows, each with a green 'HEALTHY · MOCK' pill. 'System' rows: Security posture 'JWT + refresh · RBAC'; Monitoring 'Structured logs + audit'; Storage 'Encrypted-at-rest seam'; Backup / DR 'Config-as-data, replayable'. Manage shows 'Registries (config-as-data)', all hardcoded strings: Citizens '1 seeded · CAN-linked', Officers '4 active', Departments '9 mapped', Services & metadata '21 verified', Form definitions '21 live', Workflows 'gov.standard.v1', Integration adapters '11 registered'. Flags has toggles for aiAssistant, voiceInput, proactiveSuggestions, walletSharing, emergencySos and schemeDiscovery, persisted in localStorage 'vetri.flags'. Broadcast takes a title and message, then POSTs /admin/broadcast; the button reads 'Broadcast to all citizens' → 'Sending…' → 'Delivered ✓' and an in-app notification is inserted. Logs shows 'System Logs (N in ring buffer)', the last 40 entries of the client logger, for example '[auth] login ok'. Audit is described above.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/admin/pages/AdminPortal.tsx",
+     "/Users/chandyfolder/vetri-app/src/lib/integrations/registry.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/integrations/types.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/integrations/adapters/mock.ts",
+     "/Users/chandyfolder/vetri-app/src/store/featureFlagStore.ts",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/notifications.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/logger/logger.ts",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/raw/desktop/admin__admin.full.png"
+    ],
+    "visual_potential": "The 'scale' shot: big numerals 21 / 38 / 5 / 15 / 14 counting up, then a vertical scroll through the 14 integration rows with green pulse icons. The 'MOCK' word must stay honest (crop to the HEALTHY dot only if the narration doesn't call them live). Broadcast 'Delivered ✓' is a quick tactile beat. Manage, Flags, Broadcast, Logs and Audit are not captured."
+   },
+   {
+    "name": "Integration Gateway adapters (exact list shown in Admin)",
+    "what_it_really_does": "There are 14 client-side capabilities, all mock-mode, each with a healthCheck that always resolves ok. Provider strings in display order: 'DigiLocker (mock)', 'Parivahan (mock)', 'TamilNilam (mock)', 'e-Sevai (mock)', 'TNeGA (mock)', 'UIDAI (mock)', 'PAN (mock)', 'SMS (mock)', 'Email (mock)', 'Push (mock)', 'Payment (mock)', 'Maps (mock)', 'Geolocation (browser)', 'eSign (mock DSC)'. Typed contracts include DigiLocker pullDocument/listIssued, Parivahan verifyLicence/vehicleDetails, TamilNilam pattaDetails, Aadhaar requestOtp/verifyOtp, eSign sign/verify and Payment createOrder/verifyPayment. gateway.register(cap, liveAdapter) swaps to a live adapter without changing call sites. The NestJS backend has a separate list of 10 adapters at GET /government/adapters that the Admin UI does not display: 'UIDAI Aadhaar', 'DigiLocker', 'Transport / RTO (Vahan-Sarathi)', 'Revenue Department (e-Sevai / TNeGA)', 'Greater Chennai Corporation', 'TN Police (e-Challan / Verification)', 'State Transport (TNSTC)', 'Treasury & Accounts (IFHRMS)', 'Payment Gateway (BharatKosh / UPI)', 'Certificate Authority (e-Sign / DSC)'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/lib/integrations/registry.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/integrations/adapters/mock.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/integrations/types.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/integrations/adapters/index.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/integrations/gateway.controller.ts"
+    ],
+    "visual_potential": "Typographic roll-call of the 14 names converging on a single 'Gateway' node, with the copy framed as 'built to connect' rather than 'connected'. A wall of system names is credible for a Minister if each card keeps a small 'ready / mock' tag."
+   },
+   {
+    "name": "Citizen transparency: District Scorecard (/district) and MLA Dashboard (/mla) on desktop",
+    "what_it_really_does": "DesktopTransparency reads the same analytics endpoints. If the backend refuses a citizen (RBAC), it falls back to PUBLISHED_DEPARTMENT / PUBLISHED_CONSTITUENCY. District view: title 'District Scorecard', subtitle 'Revenue & Disaster Management. Delivery performance against Right to Service timelines, published for public scrutiny.' Metrics: Applications this month 1,180; Approved 982; Pending 128; Overdue 17. Panels: Monthly throughput; Service level '4.6 average days to decision' with chips '9 escalations' and '41 rejected'; Service demand; District comparison; and an 'Officer performance' table (Officer / Designation / Completed / SLA compliance chips 98%, 96%, 93% green and 71% red). MLA view: title 'Mylapore Constituency', subtitle 'Hon. Member of Legislative Assembly, Mylapore · Chennai district. Service delivery and welfare outcomes, published for public scrutiny.' Metrics: Applications submitted 4,233; Completed 3,867; Pending 298; Avg resolution (days) 5.2. Panels: Monthly applications; Citizen satisfaction '4.3 out of 5 · citizen-rated' with chip 'Scheme utilisation 78%'; Most requested services; Most reported grievances; Ward comparison; Department performance chips (94%/91% green; 87%/84%/82% amber); Beneficiary demographics. Reached from the 'Transparency' top-nav item and the footer links 'District Scorecard' and 'MLA Dashboard'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/transparency/pages/DesktopTransparency.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/transparency/publishedFigures.ts",
+     "/Users/chandyfolder/vetri-app/src/app/router/AppRouter.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__district.png",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/raw/desktop/citizen__mla.full.png"
+    ],
+    "visual_potential": "This is the most polished desktop layout in the subsystem: a big H1, 4 icon metric cards, two-column panels and coloured HBars (maroon/blue/orange/gold). The phrase 'published for public scrutiny' plus the officer SLA table (one red 71%) gives a strong transparency message. Use the HBars panels; avoid the 'Monthly' column charts, which render as flat lines."
+   },
+   {
+    "name": "Chart kit and desktop UI primitives",
+    "what_it_really_does": "/Users/chandyfolder/vetri-app/src/components/charts/index.tsx exports 6 pure-SVG/HTML theme-aware components with no chart library: StatTile (value 22px/800 + label + optional sub), BarChart (SVG, preserveAspectRatio none, value labels), LineChart (SVG path + 8% area fill, last point enlarged), Donut (SVG stroke-dasharray, centre total, legend), HBars (6px rounded bars + value + optional suffix) and HeatGrid (HTML table, maroon alpha 0.12–0.87 by value). DesktopTransparency adds local Bar (7px bars, 0.4s width transition) and Metric (icon tile) components and uses PageHeader, Panel, StatusChip (ok/warn/err/info tones) and LoadingRows from src/app/desktop/DesktopUI.tsx.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/components/charts/index.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/transparency/pages/DesktopTransparency.tsx"
+    ],
+    "visual_potential": "HBars, HeatGrid, Donut, StatTile and StatusChip render crisply and can be rebuilt one-to-one in motion with the same data. Bar has a built-in width transition (.4s ease) that could be shown growing."
+   },
+   {
+    "name": "Role switcher / RBAC (/demo 'Presentation Mode')",
+    "what_it_really_does": "'ENTER AS' lists 5 personas: Citizen 'Chandramoulishwarar K · Mylapore'; Officer 'Tmt. R. Kalaivani · Revenue Inspector'; Department 'Revenue & Disaster Management'; MLA 'Mylapore Assembly Constituency'; Super Admin 'Platform administration'. Each logs in with that role and routes to ROLE_HOME (/home, /officer, /department, /mla-portal, /admin). Routes are guarded by RoleRoute permissions: application:process, analytics:read, admin:manage. Script step 7 reads 'Switch to Officer — review, verify, approve & issue'; step 9 reads 'Open MLA Dashboard — constituency analytics'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/demo/pages/DemoMode.tsx",
+     "/Users/chandyfolder/vetri-app/src/lib/rbac/roles.ts",
+     "/Users/chandyfolder/vetri-app/src/app/router/AppRouter.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/04_demo.png"
+    ],
+    "visual_potential": "A 'one platform, five seats of government' beat: the five persona cards stack in and the camera dives through the Officer card into the portal. A clean way to bridge from citizen to governance in a 20s film."
+   }
+  ],
+  "real_data": [
+   "TN_DISTRICTS (38, src/features/services/catalog/geo.ts): Ariyalur, Chengalpattu, Chennai, Coimbatore, Cuddalore, Dharmapuri, Dindigul, Erode, Kallakurichi, Kancheepuram, Kanniyakumari, Karur, Krishnagiri, Madurai, Mayiladuthurai, Nagapattinam, Namakkal, Nilgiris, Perambalur, Pudukkottai, Ramanathapuram, Ranipet, Salem, Sivaganga, Tenkasi, Thanjavur, Theni, Thoothukudi, Tiruchirappalli, Tirunelveli, Tirupathur, Tiruppur, Tiruvallur, Tiruvannamalai, Tiruvarur, Vellore, Viluppuram, Virudhunagar",
+   "Chennai taluks (geo.ts TN_TALUKS): Mylapore, Egmore, Guindy, Ambattur, Sholinganallur",
+   "Per-district data exists for only 5 districts, districtComparison (src/mocks/handlers/analytics.ts): Chennai 1180, Coimbatore 964, Madurai 842, Trichy 733, Salem 651",
+   "Officer persona (src/mocks/handlers/applications.ts OFFICERS): 'Tmt. R. Kalaivani' · 'Revenue Inspector' · 'Mylapore Taluk'; 'Thiru. S. Murugesan' · 'Deputy Tahsildar' · 'Egmore Taluk'; 'Tmt. P. Anitha' · 'Zonal Officer' · 'GCC Zone 9'; 'Thiru. K. Ramesh' · 'Sub-Registrar' · 'Chennai Central'",
+   "Seeded applications (applications.ts): 'APP-2026-IC-44821' Income Certificate (stage Inspection, 'SLA: 3 day(s) at this stage', fields fullName 'Chandramoulishwarar K', purpose 'Educational Concession'); 'APP-2026-CC-44903' Community Certificate (stage Approval, 'SLA: 2 day(s) at this stage', community 'BC')",
+   "Certificate issued on approve: 'CRT-2026-IC-44821' (referenceNo with APP→CRT), holderName 'CHANDRAMOULISHWARAR K'",
+   "Officer stats (src/mocks/handlers/officer.ts): pending 2, dueToday 0, highPriority 2, escalated 0, corrections 0 (live at seed); completedThisMonth 47, avgProcessingDays 4.2, approvalRate 92, citizenRating 4.6, slaCompliance 96, departmentRank 3 (static)",
+   "Officer action cards (OfficerReview.tsx): 'Approve & Issue' — 'eSign (placeholder) → generate certificate → deliver to Wallet'; 'Request Correction' — 'Return to citizen for additional documents'; 'Escalate' — 'Escalate to Revenue Divisional Officer (RDO)'; 'Transfer' — 'Reassign to another officer'; 'Reject' — 'Record reason and close the application'",
+   "Audit action codes (officer.ts): 'approve+issue', 'reject', 'request-correction', 'escalate', 'transfer'; seed row actor 'system', action 'seed', entityId 'vetri', note 'Demo data initialised'",
+   "Approval notification text (officer.ts): 'Income Certificate APP-2026-IC-44821 approved by Tmt. R. Kalaivani. Certificate issued to your Wallet.'",
+   "Workflow 'gov.standard.v1' 15 stages (src/lib/workflow/definitions.ts): Submitted, Document Verification, Officer Assigned, Department Queue, Inspection, Remarks, Escalation, Approval, Digital Signature, Certificate Generation, Delivered to Wallet, Citizen Notified, Completed, Rejected, Correction Requested",
+   "Department analytics (analytics.ts / publishedFigures.ts): department 'Revenue & Disaster Management'; today 34(+live), month 1180, pending 126(+live), approved 982, rejected 41, avgSlaDays 4.6, overdue 17, escalations 9; 'On-time' '96%' hardcoded in DepartmentDashboard.tsx",
+   "Department monthlyTrend: Feb 820, Mar 940, Apr 1010, May 1105, Jun 1160, Jul 1180(+live; 1,182 in captures)",
+   "Department serviceDemand: Income 412, Community 318, Patta 214, Birth 156, Death 80",
+   "Top officers (MSW, as captured): Tmt. R. Kalaivani (Revenue Inspector) 63 / SLA 98%; Thiru. S. Murugesan (Deputy Tahsildar) 51 / 96%; Tmt. P. Anitha (Zonal Officer) 44 / 93%; Needs attention: Thiru. D. Prakash (Deputy Tahsildar) 12 / 71%",
+   "Constituency (analytics.ts): 'Mylapore', district 'Chennai', mla 'Hon. Member of Legislative Assembly, Mylapore'; submitted 4231(+live → 4,233 captured), completed 3867, pending 296(+live → 298), avgResolutionDays 5.2, satisfaction 4.3, schemeUtilisation 78",
+   "Constituency monthlyTrend: Feb 520, Mar 588, Apr 641, May 702, Jun 745, Jul 790(+live → 792)",
+   "topServices: Income Cert 1240, Community 918, Ration Card 704, Patta 512, Birth Cert 431",
+   "topComplaints: Road Damage 214, Water Supply 168, Streetlight 122, Garbage 96",
+   "departmentPerformance: Revenue 94%, Civil Supplies 91%, GCC 87%, Transport 84%, Registration 82%",
+   "demographics: Women beneficiaries 1832, Students / Youth 1114, Senior citizens 689, Farmers 402, Disabled citizens 194 (sum 4231 = Donut centre)",
+   "Wards (wardComparison): Ward 121 312, Ward 122 287, Ward 123 341, Ward 124 268, Ward 125 224, Ward 126 373; callout 'Ward 126 (Mylapore) leads service uptake this quarter.' (MlaPortal.tsx)",
+   "Heat map rows ['Income','Ration','Patta','Birth'] × cols ['W121','W122','W123','W124','W125','W126']: Income [42,38,51,33,29,58]; Ration [31,27,36,22,19,41]; Patta [18,14,22,12,9,26]; Birth [12,16,19,11,8,21]",
+   "MLA sections: 'Overview', 'Trends', 'Services', 'People', 'Wards'; 'Presentation mode — auto-advancing every 5s'",
+   "Admin Overview tiles (captured): Services 21, Districts 38, Roles 5, Workflow Stages 15, Integrations 14, Uptime 99.9%",
+   "Admin integration rows (captured, in order): 'DigiLocker (mock)', 'Parivahan (mock)', 'TamilNilam (mock)', 'e-Sevai (mock)', 'TNeGA (mock)', 'UIDAI (mock)', 'PAN (mock)', 'SMS (mock)', 'Email (mock)', 'Push (mock)', 'Payment (mock)', 'Maps (mock)', 'Geolocation (browser)', 'eSign (mock DSC)' each 'HEALTHY · MOCK'",
+   "Admin System rows: 'Security posture' 'JWT + refresh · RBAC'; 'Monitoring' 'Structured logs + audit'; 'Storage' 'Encrypted-at-rest seam'; 'Backup / DR' 'Config-as-data, replayable'",
+   "Admin Manage rows: Citizens '1 seeded · CAN-linked'; Officers '4 active'; Departments '9 mapped'; Services & metadata '21 verified'; Form definitions '21 live'; Workflows 'gov.standard.v1'; Integration adapters '11 registered'",
+   "Feature flags (src/store/featureFlagStore.ts): aiAssistant, voiceInput, proactiveSuggestions, walletSharing, emergencySos, schemeDiscovery (all true)",
+   "Roles (src/lib/rbac/roles.ts): citizen, officer, department, mla, admin; homes /home, /officer, /department, /mla-portal, /admin",
+   "Transparency copy (DesktopTransparency.tsx): 'Delivery performance against Right to Service timelines, published for public scrutiny.'; 'Service delivery and welfare outcomes, published for public scrutiny.'; '4.6 average days to decision'; '4.3 out of 5 · citizen-rated'",
+   "Mobile-only transparency values (NOT on desktop; DistrictScorecard.jsx / MLADashboard.jsx): 'Chennai District' 87/100; Complaints 89%, Avg Time 4.2d, Satisfaction 4.1/5, Delivery 92%; Budget 'Rs.42Cr', Projects 28, Resolved 89%, Rating 4.2/5; 'Road Widening - TTK' 65% Rs.8.5Cr, 'Community Hall' Completed Rs.3.2Cr, 'Storm Water Drain' Planned Rs.12Cr"
+  ],
+  "strongest_moments": [
+   "Officer 'Approve & Issue' on APP-2026-IC-44821: arm the card, press Confirm, the timeline fills to Completed and the screen shows 'Case closed — certificate issued and delivered to the citizen's Wallet.' This is the clearest proof that the platform executes rather than just displays: one click runs 7 legal workflow transitions, issues CRT-2026-IC-44821, notifies the citizen and writes an audit row. It needs a fresh recording (no capture exists).",
+   "Admin Overview 'scale' shot: 21 Services / 38 Districts / 5 Roles / 15 Workflow Stages / 14 Integrations, then the 14-row integration health list with green pills (admin__admin.full.png). The numbers are computed from real registries (except Uptime), so they are safe to animate as count-ups, as long as integrations are described as ready/mock rather than live.",
+   "MLA ward heat map (Services tab): a 4×6 maroon grid, Income/Ration/Patta/Birth × W121–W126, peaking at 58 (Income, W126), paired with the Wards HBars and 'Ward 126 (Mylapore) leads service uptake this quarter.' It is the most minister-relevant visual (ward-level demand) and is a clean HTML table that animates cell by cell.",
+   "MLA presentation mode: press ▶ and the sections auto-advance every 5s (Overview → Trends → Services → People → Wards). It is a real feature built for a briefing room, and a recording gives natural cuts.",
+   "Citizen District Scorecard / Mylapore Constituency pages (citizen__district.png, citizen__mla.full.png): the most polished desktop layout. 'published for public scrutiny' and the officer SLA table (98/96/93 green, 71% red) make the accountability point in one frame.",
+   "/demo persona chooser (04_demo.png): five cards, Citizen / Officer / Department / MLA / Super Admin, as the 'one platform, every seat of government' transition into the portals."
+  ],
+  "honesty_flags": [
+   "None of the analytics is real government data. Both MSW and the NestJS backend say they serve 'charter-plausible seeded aggregates' plus a tiny live offset from the database (+2 seeded apps). The MLA name is the generic 'Hon. Member of Legislative Assembly, Mylapore'. Ward labels 121–126 and the heat-map values are seeded.",
+   "The '38 districts' figure is only a count tile (TN_DISTRICTS.length) and a form dropdown list. No 38-district map, ranking or per-district scorecard exists. Per-district numbers exist for just 5 districts (Chennai, Coimbatore, Madurai, Trichy, Salem), and the 'District Scorecard' page is really one department's (Revenue & Disaster Management) scorecard.",
+   "All 14 integrations are mocks. Provider names literally include '(mock)', the pill says 'HEALTHY · MOCK', and healthCheck always returns ok. Do not claim live Aadhaar/DigiLocker/Parivahan connectivity. The backend has a different set of 10 adapters (incl. 'Greater Chennai Corporation', 'Treasury & Accounts (IFHRMS)', 'Payment Gateway (BharatKosh / UPI)') that no screen shows.",
+   "Inconsistent counts in Admin: Overview says Integrations 14, but Manage says 'Integration adapters 11 registered'. Manage's 'Officers 4 active', 'Departments 9 mapped' and 'Citizens 1 seeded · CAN-linked' are hardcoded strings, as are 'Uptime 99.9%' (Admin) and 'On-time 96%' (Department).",
+   "eSign is a placeholder. Approval does not call the eSign adapter; 'Digital Signature' is only a workflow stage, and the UI itself says 'eSign (placeholder)'.",
+   "The officer KPIs Done (month) 47, Avg Processing 4.2d, Approval Rate 92%, Citizen Rating 4.6/5, SLA Compliance 96% and Dept Rank #3 are static constants. Only Pending, Due Today, High Priority, Escalated and Corrections change after an action. 'Done (month)' stays 47 after an approval, despite the footer 'Metrics update live with every action you take'.",
+   "The officer queue is not jurisdiction-scoped: it lists every application record, whatever the code comment claims. 'SLA: N day(s) at this stage' is the stage's SLA allowance, not a live countdown.",
+   "Escalate and Request Correction are not legal on the Community Certificate (it sits at Approval) and will show 'Action not permitted from the current stage.' Film these actions on APP-2026-IC-44821. The review timeline can show 'Escalation' as done (green) for cases that skipped it, because done status is index-based.",
+   "Feature flags toggle and persist, but no feature reads them; only AdminPortal imports useFeatureFlags. Don't imply that flipping a flag disables AI or SOS.",
+   "Broadcast only inserts an in-app notification. No SMS, push or email is sent; the UI itself says 'when live'. The Logs tab shows the current browser session's client ring buffer, not server logs. The 'PDF export' is window.print().",
+   "Persona inconsistency: MSW (what the captures show) has Kalaivani as 'Revenue Inspector · Mylapore Taluk', the backend seed has her as 'Tahsildar', and publishedFigures.ts lists top officers 'Thiru. S. Muthukumar' and 'Tmt. K. Anitha' while MSW shows 'Thiru. S. Murugesan' and 'Tmt. P. Anitha'. Pick the captured MSW version and stay consistent.",
+   "Numbers differ slightly by mode: live MSW shows Pending 128 / Jul 1,182 / Submitted 4,233, while the published fallback shows 126 / 1,180 / 4,231. Mobile-only screens carry different hardcoded figures (Satisfaction 4.1/5, 87/100, Rs.42Cr budget, 28 projects); never mix them with the desktop 4.3/5.",
+   "Capture artefacts: on every officer/department/MLA/admin desktop capture the shell header still shows citizen 'Chandramoulishwarar · TN-2024-XXXX-8842' and the citizen nav. Crop to the portal body, or the film shows a citizen identity on a government console.",
+   "Visual defects, don't feature as-is: (1) the desktop transparency 'Monthly throughput' and 'Monthly applications' column charts render as flat 4px lines, because percentage heights inside auto-height flex columns collapse. (2) The SVG LineChart and BarChart use preserveAspectRatio='none', so at desktop width their labels and values are stretched and illegible. This is visible on the Department page and will also affect the MLA Trends and Services charts. HBars, HeatGrid, Donut and StatTile render cleanly.",
+   "Not captured yet (must be recorded live): /officer/app/:id review and approval, MLA Trends/Services/People/Wards and presentation mode, Admin Manage/Flags/Broadcast/Logs/Audit. *__landing.png files are byte-identical to the portal captures (officer differs only trivially)."
+  ],
+  "notes": "Routes: /officer and /officer/app/:id (permission application:process); /department and /mla-portal (analytics:read); /admin (admin:manage); citizen /district and /mla render DesktopTransparency on desktop (src/app/router/AppRouter.tsx). Officer, Department, MLA and Admin all reuse the same mobile-styled component inside the desktop shell. Only the citizen transparency pages have a desktop-native layout.\n\nBest real 20s arc for this subsystem: /demo persona cards → Officer queue → Approve & Issue confirm → 'Case closed' → Admin Audit row 'approve+issue · APP-2026-IC-44821' → MLA heat map / presentation mode → Admin '38 Districts · 21 Services · 14 Integrations'.\n\nAfter one approval in the same MSW session, the live numbers tick: Officer Pending 2→1 and High Priority 2→1; Department Pending 128→127 and Approved 982→983; Constituency Completed 3,867→3,868 and Pending 298→297. A before/after cut is honest.\n\nFull-page 3840px captures are in /Users/chandyfolder/vetri-app/motion-studio/captures/raw/desktop/*.full.png; downscaled copies I viewed are in the session scratchpad. docs/PHASE3.md sections 1–4 and 6 match the code, apart from the Manage-tab hardcoded counts noted above."
+ },
+ {
+  "subsystem": "Citizen service journey: catalogue → apply → track → certificate in Digital Locker, plus home, timeline, schemes, grievances, emergency, notifications",
+  "purpose": "This is the citizen's working path through the desktop portal. A signed-in citizen (persona \"Chandramoulishwarar K\", Citizen ID TN-2024-XXXX-8842) browses 21 official TN services and applies through a stepper driven by data definitions (Form Engine). The submission gets an APP-2026-XX-NNNNN reference and a scannable QR, and its progress through the 13-stage 'gov.standard.v1' Right-to-Service workflow shows on the tracker with the assigned officer. When an officer approves it in the Officer Portal, a CRT- certificate is placed in the citizen's Digital Locker automatically and a notification is sent. Alongside this sit a lifetime Digital Citizen Timeline, 9 welfare schemes ranked by match % with Tamil names, a grievance form that previews department routing live and issues a CMP- reference, an emergency number directory and a notification inbox. All screenshots run on in-browser MSW mocks (VITE_ENABLE_MSW=true). The NestJS backend uses the same reference formats (backend/src/modules/applications/applications.service.ts:46, complaints.service.ts:36).",
+  "capabilities": [
+   {
+    "name": "Service catalogue (21 services, 6 categories, department filter)",
+    "what_it_really_does": "GET /api/services maps SERVICE_META (21 entries) to cards. Each card shows the name, department, processing time (cut at the first '(') and fee. Category chips on screen: 'All · 21', 'Certificates · 8', 'Transport · 5', 'Revenue · 5', 'Welfare · 1', 'Municipal · 2'. Department chips include 'Revenue & Disaster Management Department · 4', 'Revenue Department · 4', 'Transport Department (MoRTH) · 3', 'Registration Department (IGR) · 2'. Popular set: Income, Community, Birth, Driving Licence ('Most requested'). 'Recently used' is built from the citizen's real applications (Income, Community). Search covers service name and department. Modes: 12 'digital' and 9 'assisted' (assisted services hand off to Parivahan Sarathi/Vahan, TNPDS, TamilNilam, TN Urban ePay, Chennai Metro Water, e-Challan).",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/services/catalog/meta.ts",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/catalog.ts",
+     "/Users/chandyfolder/vetri-app/src/features/services/pages/DesktopServices.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__services.png"
+    ],
+    "visual_potential": "Grid of service cards with rupee icon, 'POPULAR' badge, '7–15 working days · ₹60'. Animate the chip counters ticking to 21 / 8 / 5 / 5 / 1 / 2. The department chips can act as a 'whole government in one portal' beat."
+   },
+   {
+    "name": "Service application stepper (DesktopServiceFlow)",
+    "what_it_really_does": "Route /service/:id. Header shows the service name, a Digital/Assisted chip and the Tamil name (e.g. 'வருமானச் சான்றிதழ்'). Steps: 'Overview','Eligibility','Documents','Application','Review', then 'Payment' only when the fee is not free (regex /free|^₹?0$|nil/i), then 'Submit'. Income Certificate has 7 steps; Birth Certificate ('Free within 21 days') has 6. Fields are prefilled from the citizen profile (name, address 12/3, TTK Road, Alwarpet, district Chennai, taluk Mylapore, pincode 600018). Zod validation from FormDefinition: Aadhaar 12 digits, mobile 10 digits, pincode 6 digits. Documents enforce the official format/size rules (photo JPEG/PNG max 50 KB, docs PDF/JPEG max 200 KB, PDF max 500 KB) and can attach an existing verified wallet document ('Use a wallet document'). Save draft is available from step 4. The right rail shows Processing time, Official fee, Department, Validity, a Document checklist and Help.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/services/pages/DesktopServiceFlow.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/services/catalog/forms.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/forms/engine.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/forms/types.ts",
+     "/Users/chandyfolder/vetri-app/src/components/forms/DesktopDocumentUpload.tsx"
+    ],
+    "visual_potential": "Horizontal stepper with green checkmarks advancing across 'Overview → … → Submit'. Document checklist rows flipping from 'REQ' to a green check. 'Step 5 of 7' counter. Gold 'Submit application' button. NOT CAPTURED yet: no PNG exists for /service/:id, so it needs a new capture."
+   },
+   {
+    "name": "Submission → reference number + real QR acknowledgement",
+    "what_it_really_does": "POST /api/applications. seq starts at 44821 and increments, so the first new MSW application is APP-2026-{code}-44822 (format `APP-2026-${code}-${seq}`). Codes: IC, CC, BC, DC, MC, DL, RC, PT, RES, NAT, LH, EC, CHT, ADG, FMB, RCT, DRC, MVT, ECH, PTX, WTR, fallback GN. A workflow instance starts at 'submitted', officer is null ('Awaiting assignment'), status is 'Submitted'. A notification is pushed: 'Application Submitted' / '{service} — {ref} received. We'll notify you at each step.' The acknowledgement screen reads 'Application submitted' / 'Your application has been received by {department}.', shows the reference in monospace and a scannable QR (qrcode lib) encoding `VETRI-TN|{ref}|{serviceName}` with the caption 'Scan to verify this reference'. Buttons: Track application, Download acknowledgement (writes {ref}-acknowledgement.txt headed 'GOVERNMENT OF TAMIL NADU — VETRI e-SEVAI / APPLICATION ACKNOWLEDGEMENT'), Print, Share. Assisted services add 'Continue on {externalName}'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/applications.ts",
+     "/Users/chandyfolder/vetri-app/src/features/services/pages/DesktopServiceFlow.tsx",
+     "/Users/chandyfolder/vetri-app/backend/src/modules/applications/applications.service.ts"
+    ],
+    "visual_potential": "Hero moment: green check, reference 'APP-2026-IC-44822' typing out in monospace crimson, and the QR code resolving beside it. Needs a fresh capture after a submission."
+   },
+   {
+    "name": "Government Workflow Engine 'gov.standard.v1' (13-stage Right-to-Service pipeline)",
+    "what_it_really_does": "A data-defined state machine with 15 stage definitions and a legal-transition adjacency list. Happy path (13): Submitted → Document Verification → Officer Assigned → Department Queue → Inspection → Remarks → Approval → Digital Signature → Certificate Generation → Delivered to Wallet → Citizen Notified → Completed. Branches: Escalation (from Inspection, leads to Approval or Rejected), Rejected (terminal), Correction Requested (loops back to Document Verification). Actors are citizen/system/officer/department/signatory. Stage SLAs: Document Verification 1 day, Inspection 3, Approval 2. applyTransition throws on illegal moves. Officer actions reach their targets by BFS over legal transitions. The citizen-facing status label maps most stages to 'In Progress', plus 'Escalated', 'Completed', 'Rejected', 'Correction Requested'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/lib/workflow/definitions.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/workflow/engine.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/workflow/types.ts",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/officer.ts"
+    ],
+    "visual_potential": "A vertical rail of 13 named stages lighting up in sequence, with a stage-specific actor tag (Citizen / System / Officer / Signatory). Strong backbone graphic for the film: the stage names are exact."
+   },
+   {
+    "name": "My Applications tracker (DesktopApplications)",
+    "what_it_really_does": "Register table (Service / Reference / Department / Filed / Status) with filter chips 'All · 2', 'In progress · 2', 'Completed · 0', 'Rejected · 0'. The detail panel shows Reference, Department, Officer, 'Filed on', and '{n} days remaining under the Right to Service charter.' The progress timeline lists every non-terminal stage with done/current/pending state and dates. Seed: Income Certificate APP-2026-IC-44821 at 'Inspection' (officer Tmt. R. Kalaivani · Revenue Inspector, Mylapore Taluk; '3 days remaining'). Community Certificate APP-2026-CC-44903 at 'Approval' (Thiru. S. Murugesan · Deputy Tahsildar, Egmore Taluk).",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/applications/pages/DesktopApplications.tsx",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/applications.ts",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__tracker.png",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/raw/desktop/citizen__tracker.full.png"
+    ],
+    "visual_potential": "Full-page capture (citizen__tracker.full.png) shows the complete 13-row timeline: green checks through 'Department Queue', crimson ring on 'Inspection', then grey 'Pending' rows. Slow vertical pan down the timeline. Officer name card as a 'real human accountable' beat."
+   },
+   {
+    "name": "Officer approval → certificate auto-delivered to Digital Locker (end-to-end loop)",
+    "what_it_really_does": "On the Officer Portal 'approve' action, advanceRecord runs repeatedly to the terminal stage. Reaching 'walletDelivery' pushes a new wallet document: name = producesDocumentType (e.g. 'Income Certificate'), number = reference with APP replaced by CRT (e.g. CRT-2026-IC-44822), status 'verified', validity 'Valid'. It also pushes the notifications 'Certificate Ready' / '{service} issued and delivered to your Wallet.' and 'Application Approved' / '{service} {ref} approved by Tmt. R. Kalaivani. Certificate issued to your Wallet.' The Citizen Timeline then adds '{name} issued' / '{CRT-ref} · delivered to Wallet'. The officer can also reject, request correction, escalate or transfer, and each action pushes its own citizen notification. 15 of the 21 services have producesDocumentType.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/applications.ts",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/officer.ts",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/analytics.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/modules/applications/applications.service.ts"
+    ],
+    "visual_potential": "Cross-cut: the officer clicks Approve, the tracker fills green to the end, a new card 'Income Certificate · CRT-2026-IC-44822 · Verified' slides into the Locker grid, and the bell badge increments. This is the payoff shot of the whole journey. Requires a live capture across two roles in one browser session, because state is in-memory."
+   },
+   {
+    "name": "Digital Locker (DesktopLocker)",
+    "what_it_really_does": "File-explorer view of the wallet documents. Folder rail: 'All documents 4', Civil 1, Civil Supplies 1, Revenue 1, Transport 1. Searchable tile grid with 'Verified' badges. The Document preview panel shows number, holder, category and validity. Download writes '{number}-record.txt' ('GOVERNMENT OF TAMIL NADU — VETRI DIGITAL LOCKER / VERIFIED DOCUMENT RECORD'). Share uses the Web Share API or clipboard. Pin is local UI state only.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/documents/pages/DesktopLocker.tsx",
+     "/Users/chandyfolder/vetri-app/src/mocks/db.ts",
+     "/Users/chandyfolder/vetri-app/src/features/documents/services/documentEngine.ts",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__wallet.png"
+    ],
+    "visual_potential": "Four coloured tiles (blue Transport, purple Civil, green Revenue, green Civil Supplies). Preview card 'Driving License · DL-TN-2024-8842 · CHANDRAMOULISHWARAR K · Valid: 12/2029'. Good for an 'all your documents, verified' beat."
+   },
+   {
+    "name": "Citizen dashboard (DesktopDashboard + DesktopHero)",
+    "what_it_really_does": "Tamil greeting 'வணக்கம்,' over the name 'Chandramoulishwarar K' with an emblem watermark. Stat tiles: '2 Active Applications', '4 Documents in Locker', '9 Eligible Schemes', '1 Open Grievances'. Sidebar card: CITIZEN ID TN-2024-XXXX-8842, Chennai · Mylapore, 'Aadhaar + DigiLocker'. Quick Services shows the 8 popular-first services. Recent Applications, Announcements & Notices (5 latest notifications), Grievance Timeline (Road Damage, 4-dot stepper), Digital Locker mini-grid, Recommended Schemes (first 4 with % match) and a Government Departments directory. Emergency tiles: Police 100, Ambulance 108, Fire 101, Emergency 112.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/home/pages/DesktopDashboard.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopHero.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopQuickServices.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopAnnouncements.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__home.png",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/raw/desktop/citizen__home.full.png"
+    ],
+    "visual_potential": "Opening hero: crimson gradient band, Tamil 'வணக்கம்,' then the name, and the four stat counters counting up (2 / 4 / 9 / 1). The full-page PNG supports a long vertical scroll."
+   },
+   {
+    "name": "Digital Citizen Timeline",
+    "what_it_really_does": "GET /api/citizen/timeline returns 6 static life events, every live application record, and any CRT- certificates issued in-session. Desktop groups them by year, newest first, with chips 'All · 8', 'Certificates · 4', 'Applications · 2', 'Grievances · 1', 'Milestones · 1'. 'Export timeline' writes vetri-citizen-timeline.txt.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/analytics.ts",
+     "/Users/chandyfolder/vetri-app/src/features/citizen/pages/DesktopTimeline.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/citizen/pages/CitizenTimeline.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/raw/desktop/citizen__timeline.full.png"
+    ],
+    "visual_potential": "A 'one life, one digital history' sweep from 2002 to 2026: Birth Certificate (2002) → School Admission (2008) → Community Certificate (2019) → Driving Licence (2024) → Ration Card (2025) → Income/Community applications + Road Damage grievance (2026). Year headers can be animated as a scrubbing date counter. The mobile version uses the tagline 'One life · one digital history · {n} government interactions'."
+   },
+   {
+    "name": "Welfare Schemes (9, bilingual, match-ranked)",
+    "what_it_really_does": "Lists SCHEMES_2026 sorted by matchScore descending. Each card shows the English name, the Tamil name, the benefit, 'Allocation ₹… Crore' where a budget exists, the department, an eligibility meter and a band label (≥85 'High match', ≥70 'Likely eligible', else 'Worth checking'). Supports bookmark, compare up to 3 in a table, and a detail panel with 'How to apply' plus an 'Apply for Income Certificate' deep link. The UI states 'Online scheme enrolment is not yet available in Vetri.'",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/schemes/catalog/schemes2026.ts",
+     "/Users/chandyfolder/vetri-app/src/features/schemes/pages/DesktopSchemes.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__schemes.png"
+    ],
+    "visual_potential": "Cards with Tamil script under English titles and coloured progress bars filling to 95/92/88/85/80%. Good bilingual beat for a Tamil Nadu Minister."
+   },
+   {
+    "name": "Grievance filing with live routing preview",
+    "what_it_really_does": "'File a grievance' panel. Categories: Road Damage, Water Supply, Streetlight, Garbage, Drainage, Other. Description must be at least 10 characters; area and ward fields are optional. A live 'Where this will go' box comes from routeComplaint(): Road Damage/Water Supply → High, 5 days; Streetlight/Drainage → Medium, 7 days; Garbage/Other → Low, 7 days. Department is 'GCC - Highways' for Road Damage/Streetlight and 'Metro Water / GCC' for everything else. Submit returns `CMP-TN-2026-${seq padded to 6}`; the first new one in MSW is CMP-TN-2026-000453. The success panel reads '{category} reported · Routed to … · expected resolution within N days'. The register shows Category/Reference/Department/Priority/Filed/Status, and the Resolution timeline reads 'Submitted' → 'Assigned to department' → 'Work in progress' → 'Resolved'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/complaints/pages/FileGrievancePanel.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/complaints/routing.ts",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/complaints.ts",
+     "/Users/chandyfolder/vetri-app/src/features/complaints/pages/DesktopGrievances.tsx",
+     "/Users/chandyfolder/vetri-app/backend/src/modules/complaints/complaints.service.ts",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__complaint.png"
+    ],
+    "visual_potential": "Selecting the 'Road Damage' chip makes the routing box update instantly to GCC - Highways / High / 5 days, then the reference appears. The filing panel and filed state are NOT captured (current PNG shows only the register with seed CMP-TN-000452)."
+   },
+   {
+    "name": "Notifications inbox",
+    "what_it_really_does": "6 seeded notifications, 2 unread (header bell badge '2'). Filters: 'All · 6', 'Unread · 2', Applications 1, Grievances 1, Schemes 1, Documents 1. Mark read and 'Mark all as read (2)' call the API. 'Open' deep-links via actionPath. New items are pushed live by submissions, officer actions and admin broadcast.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/notifications/pages/DesktopNotifications.tsx",
+     "/Users/chandyfolder/vetri-app/src/mocks/db.ts",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/notifications.ts",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__notifications.png"
+    ],
+    "visual_potential": "An unread row with a gold 'New' chip, 'Birth Certificate Approved'. Use as a quick insert after the approval payoff."
+   },
+   {
+    "name": "Emergency Directory",
+    "what_it_really_does": "A static directory of official numbers rendered as tel: links. Primary: All Emergencies 112, Police 100, Ambulance 108, Fire & Rescue 101. Specialised: Women Helpline 181, Childline 1098, Senior Citizen Helpline 14567, Disaster Management 1070, Railway Helpline 139, Metro Water (Chennai) 044-4567 4567, TANGEDCO 94987 94987, e-Sevai Helpline 1100. Includes 'Before you call' guidance and a 'Not an emergency?' link to grievances.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/emergency/pages/DesktopEmergency.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__emergency.png"
+    ],
+    "visual_potential": "Four oversized coloured numbers (112 blue, 100 red, 108 green, 101 orange). Works as a one-second 'safety' flash; nothing more should be implied."
+   }
+  ],
+  "real_data": [
+   "Citizen: 'Chandramoulishwarar K' · Citizen ID 'TN-2024-XXXX-8842' · 'Chennai · Mylapore' · verified via 'Aadhaar + DigiLocker' · Aadhaar 'XXXX XXXX 8842' · address '12/3, TTK Road, Alwarpet', Mylapore, Chennai 600018 (src/mocks/db.ts)",
+   "Dashboard greeting: 'வணக்கம்,' + 'Chandramoulishwarar K'; stats '2 Active Applications', '4 Documents in Locker', '9 Eligible Schemes', '1 Open Grievances' (src/app/desktop/DesktopHero.tsx; citizen__home.png)",
+   "Workflow id 'gov.standard.v1', name 'Standard Government Service' (src/lib/workflow/definitions.ts)",
+   "Stage labels, in order: 'Submitted','Document Verification','Officer Assigned','Department Queue','Inspection','Remarks','Escalation','Approval','Digital Signature','Certificate Generation','Delivered to Wallet','Citizen Notified','Completed','Rejected','Correction Requested'; SLA: Document Verification 1d, Inspection 3d, Approval 2d (definitions.ts)",
+   "Seed applications: 'APP-2026-IC-44821' Income Certificate, stage Inspection, officer 'Tmt. R. Kalaivani · Revenue Inspector' (Mylapore Taluk), '3 days remaining under the Right to Service charter.'; 'APP-2026-CC-44903' Community Certificate, stage Approval, officer 'Thiru. S. Murugesan' Deputy Tahsildar, Egmore Taluk (src/mocks/handlers/applications.ts; citizen__tracker.png)",
+   "Officer pool: 'Tmt. R. Kalaivani' Revenue Inspector/Mylapore Taluk; 'Thiru. S. Murugesan' Deputy Tahsildar/Egmore Taluk; 'Tmt. P. Anitha' Zonal Officer/GCC Zone 9; 'Thiru. K. Ramesh' Sub-Registrar/Chennai Central (applications.ts)",
+   "Reference format: `APP-2026-${code}-${seq}`, seq from 44821, so the first new submission is e.g. 'APP-2026-IC-44822' or 'APP-2026-BC-44822'; certificate number = ref with APP→CRT, e.g. 'CRT-2026-IC-44822'; ack QR payload `VETRI-TN|APP-2026-IC-44822|Income Certificate` (applications.ts; DesktopServiceFlow.tsx)",
+   "Service codes: IC, CC, BC, DC, MC, DL, RC, PT, RES, NAT, LH, EC, CHT, ADG, FMB, RCT, DRC, MVT, ECH, PTX, WTR (fallback GN) (applications.ts)",
+   "Catalogue (21) name · Tamil · code · fee · time · mode (src/features/services/catalog/meta.ts): Income Certificate · வருமானச் சான்றிதழ் · REV-103 · ₹60 · 7–15 working days · digital | Community Certificate · சாதிச் சான்றிதழ் · REV-101 · ₹60 · 15 days (BC/MBC) · up to 30 days (SC/ST) · digital | Birth Certificate · பிறப்புச் சான்றிதழ் · CRS-BIRTH · Free within 21 days · ≤ 21 days: automatic · delayed: per authorisation · digital | Death Certificate · இறப்புச் சான்றிதழ் · CRS-DEATH · Free within 21 days · same · digital | Marriage Certificate · திருமணச் சான்றிதழ் · IGR-301 · ₹100 (HMA) / ₹150 (SMA) + ₹100 appointment · HMA: same-day post-verification · SMA: 30-day notice period · digital | Driving Licence · ஓட்டுநர் உரிமம் · SARATHI-DL · LLR ₹200 · DL ₹700 (single) / ₹1,000 (dual) · LLR: same day · DL: after 30-day hold + driving test · assisted | Ration Card (Smart Card) · ரேஷன் அட்டை · TNPDS · Free (Gov ₹0) · New card: up to 60 days · assisted | Patta Transfer · பட்டா மாற்றம் · REV-501 · ₹60 (transfer) · ₹25 (extracts) · Full/Joint: 15 days · Subdivision: 30 days · assisted | Residence Certificate · வசிப்பிடச் சான்றிதழ் · REV-116 · ₹60 · 7–15 days · digital | Nativity Certificate · பூர்வீகச் சான்றிதழ் · REV-102 · ₹60 · 7–15 days · digital | Legal Heir Certificate · வாரிசுச் சான்றிதழ் · REV-114 · ₹60 · 15–30 days · digital | Encumbrance Certificate · வில்லங்கச் சான்றிதழ் · TNREG-EC · ₹116 + ₹5/yr · 2–5 working days · digital | Chitta / Patta Extract · சிட்டா / பட்டா சாறு · REV-CHITTA · Free · Instant · digital | Adangal Extract (A-Register) · அடங்கல் சாறு · REV-ADANGAL · Free · Instant · digital | FMB Sketch · அளவைப் படம் (FMB) · REV-FMB · Free · Instant · digital | RC Transfer · ஆர்.சி. பரிமாற்றம் · TRN-RC-TRANS · ₹50 + smart-card/postal · 15–30 days · assisted | Duplicate RC · நகல் ஆர்.சி. · TRN-DUP-RC · ₹150–₹300 · 15–30 days · assisted | Vehicle Tax Payment · வாகன வரி · TRN-MV-TAX · Calculated dynamically · Instant · assisted | e-Challan Payment · இ-சலான் · TRN-ECHALLAN · As per violation · Instant · assisted | Property Tax Payment · சொத்து வரி · ULB-PT · Calculated dynamically · Instant · assisted | Water Charges · குடிநீர்க் கட்டணம் · ULB-WT · Fixed tax + volumetric charge · Instant · assisted",
+   "Category chips on screen: 'All · 21', 'Certificates · 8', 'Transport · 5', 'Revenue · 5', 'Welfare · 1', 'Municipal · 2' (citizen__services.png)",
+   "Income Certificate fee breakdown: govFee '₹0', serviceCharge '₹60 (e-Sevai)', validity '6 months from date of issue', issuing 'Tahsildar', escalation 'Revenue Divisional Officer (RDO)', appeal 'District Revenue Officer (DRO)' (meta.ts)",
+   "Income Certificate required documents: 'Applicant Photo', 'Aadhaar / Govt ID', 'Ration / Smart Card', 'Income Proof (Salary slip / IT return / PAN)', 'Self-Declaration (auto-generated)'; purposes 'Educational Concession','Scholarship','Welfare Scheme','Employment','Other' (src/features/services/catalog/forms.ts)",
+   "Stepper labels: 'Overview','Eligibility','Documents','Application','Review','Payment'(only if fee payable),'Submit'; buttons 'I meet these — continue', 'Review application', 'Submit application'; payment options 'UPI' (BHIM / GPay / PhonePe), 'Debit / credit card', 'Pay at e-Sevai centre' (DesktopServiceFlow.tsx)",
+   "Acknowledgement strings: 'Application submitted', 'Your application has been received by {department}.', 'Scan to verify this reference', 'Track application', 'Download acknowledgement', file header 'GOVERNMENT OF TAMIL NADU — VETRI e-SEVAI' / 'APPLICATION ACKNOWLEDGEMENT' (DesktopServiceFlow.tsx)",
+   "Wallet documents (src/mocks/db.ts): 'Driving License' · Transport · DL-TN-2024-8842 · RTO Chennai · 12/2029 | 'Birth Certificate' · Civil · BC-TN-2002-4421 · GCC · Lifetime | 'Income Certificate' · Revenue · IC-TN-2024-9912 · Revenue Dept · 03/2025 | 'Ration Card' · Civil Supplies · RC-TN-CHN-7788 · Civil Supplies · Active; all holder 'CHANDRAMOULISHWARAR K', DOB 22/05/2002, status verified",
+   "Certificate-ready notification: 'Certificate Ready' / '{service} issued and delivered to your Wallet.'; officer approve: 'Application Approved' / '{service} {ref} approved by Tmt. R. Kalaivani. Certificate issued to your Wallet.' (applications.ts, officer.ts)",
+   "Timeline events (src/mocks/handlers/analytics.ts): 2002 'Birth Certificate' 'BC-TN-2002-4421 · GCC Chennai'; 2008 'School Admission' 'Govt. Higher Secondary School, Mylapore'; 2019 'Community Certificate' 'Lifetime validity · Tahsildar, Mylapore'; 2024 'Driving Licence' 'DL-TN-2024-8842 · RTO Chennai'; 2025 'Ration Card (Smart Card)' 'RC-TN-CHN-7788 · Civil Supplies'; 2026 'Complaint — Road Damage' 'CMP-TN-000452 · GCC Zone 9 · In progress'; plus 'APP-2026-IC-44821 · In Progress', 'APP-2026-CC-44903 · In Progress'. Chips: 'All · 8','Certificates · 4','Applications · 2','Grievances · 1','Milestones · 1'",
+   "Schemes, 9 (src/features/schemes/catalog/schemes2026.ts), sorted as on screen: PM Kisan Samman Nidhi · பிரதம மந்திரி கிசான் சம்மான் நிதி · ₹6,000 per year · 95% | Annanin Seer Scheme · அண்ணனின் சீர் திட்டம் · 8 g gold coin + silk saree · ₹812 Crore · 92% | Thai Maaman Thanga Modhiram Scheme · தாய் மாமன் தங்க மோதிரம் திட்டம் · 1 g gold ring for every baby born in a Government hospital · ₹560 Crore · 88% | Vetri Laptop Scheme · வெற்றி மடிக்கணினி திட்டம் · Free laptop for college students · ₹2,000 Crore · 85% | Modern Bicycle Scheme · நவீன மிதிவண்டி திட்டம் · Branded bicycle with helmet and bottle holder · ₹777 Crore · 80% | Vetri Skill Training Scheme · வெற்றி திறன் பயிற்சி திட்டம் · 78% | Vetri Housing Scheme · வெற்றி வீட்டுவசதி திட்டம் · 74% | Vetri Women's Goat Rearing Scheme · வெற்றி மகளிர் ஆடு வளர்ப்பு திட்டம் · 70% | Digital Library Initiative · டிஜிட்டல் நூலகத் திட்டம் · 66%",
+   "Grievance seed: 'Road Damage' · 'CMP-TN-000452' · 'Road damage on TTK Road' · High · inProgress · 'GCC - Highways' · ETA 5 days · filed 01 Jul 2026; new format `CMP-TN-2026-000453` (src/mocks/handlers/complaints.ts)",
+   "Grievance categories 'Road Damage','Water Supply','Streetlight','Garbage','Drainage','Other'; placeholder 'Large pothole outside 12/3 TTK Road, causing two-wheeler accidents.'; area placeholder 'Mylapore', ward 'Ward 121' (FileGrievancePanel.tsx)",
+   "Notifications (db.ts): 'Birth Certificate Approved' (APP-2026-BC-1123, 2 hours ago, unread); 'Complaint Assigned' ('CMP-TN-000452 assigned to GCC Zone 9 officer.', unread); 'New Welfare Scheme Available' ('Annanin Seer Scheme - you may be eligible for 8 g gold coin + silk saree.'); 'Service Deadline Tomorrow'; 'Document Verified'; 'Rate Your Experience'",
+   "Emergency numbers: 112, 100, 108, 101, 181, 1098, 14567, 1070, 139, '044-4567 4567', '94987 94987', 1100 (DesktopEmergency.tsx)",
+   "Portal chrome: 'Government of Tamil Nadu · Official Citizen Services Portal', 'Vetri Tamil Nadu', 'வெற்றி தமிழ்நாடு · e-Sevai Digital Services', nav 'Dashboard · Services · Applications · Digital Locker · Grievances · Schemes · Transparency · Help', toggle 'தமிழ்' (all captures)"
+  ],
+  "strongest_moments": [
+   "Apply → reference → QR: on the DesktopServiceFlow acknowledgement, the green check, 'APP-2026-IC-44822' in monospace crimson and a real scannable QR are the most concrete proof that 'it actually files'. Needs a new capture; none of the existing PNGs cover /service/:id.",
+   "13-stage Right-to-Service timeline (citizen__tracker.full.png): the exact government pipeline 'Submitted → Document Verification → Officer Assigned → Department Queue → Inspection …' with a named accountable officer ('Tmt. R. Kalaivani · Revenue Inspector') and '3 days remaining'. Reads as transparency and accountability at a glance; ideal for a slow vertical pan.",
+   "Approval payoff: the officer approves, every stage turns green, a new 'Income Certificate · CRT-2026-IC-44822 · Verified' tile appears in the Digital Locker and the bell badge increments. This is the only moment that closes the loop citizen → government → citizen, and it is genuinely implemented (in-memory). It must be captured live in one session.",
+   "Digital Citizen Timeline (citizen__timeline.full.png): a 2002→2026 sweep of one citizen's life with the state (Birth Certificate BC-TN-2002-4421 → School 2008 → Community 2019 → DL 2024 → Ration 2025 → 2026 applications and grievance). Emotionally strongest screen for a Minister.",
+   "Dashboard hero (citizen__home.png): Tamil 'வணக்கம்,' greeting, citizen name and counters '2 / 4 / 9 / 1' over the emblem watermark, with the 21-service catalogue ('All · 21') as the follow-up 'whole government in one place' beat.",
+   "Bilingual schemes grid (citizen__schemes.png): Tamil names under English titles, '₹2,000 Crore' allocations and match bars filling to 95/92/88/85/80%. Use only with the provenance caveat below."
+  ],
+  "honesty_flags": [
+   "All captured data comes from in-browser MSW mocks with in-memory state. Applications, issued certificates and notifications reset on page reload. A single persona is used, and no real department, officer, DigiLocker, Sarathi, TNPDS or TamilNilam system is connected.",
+   "Payment is not real. No gateway runs, and the chosen method (UPI/card/counter) is not even included in the submission payload, even though the UI says 'Vetri records your chosen method with the application'. Do not show or imply money moving.",
+   "Digital signature is only a workflow stage label. No cryptographic eSign happens (officer.ts comment: 'Digital signature (placeholder)'). The CRT- 'certificate' is a database row with no generated PDF; Locker 'Download' writes a .txt record.",
+   "DigiLocker import is disabled in the upload UI ('DigiLocker — coming when official integration becomes available'). Only re-use of existing wallet documents works. 'Verified via Aadhaar + DigiLocker' on the profile is seed text.",
+   "The only real rendered QR is on the application acknowledgement, and it encodes `VETRI-TN|ref|service`. Nothing verifies it. The 'QR Verify' buttons on the sidebar and profile only navigate to another page. The Desktop Locker has no QR. The mobile wallet 'QR' shares the URL https://verify.vetri.tn/d/{number}, which is not a live verification service.",
+   "Citizens cannot advance their own application on desktop. Progress comes only from Officer Portal actions, or from the mobile tracker's 'Check for updates' button, which is a demo control that advances one stage. Do not imply automatic real-time processing.",
+   "'{n} days remaining under the Right to Service charter' is just the current stage's slaDays (Inspection = 3), not a countdown computed from the filing date or the 7–15 day charter.",
+   "Tracker timeline quirks: branch stages 'Escalation' and 'Correction Requested' appear as linear pending rows. On a Completed application, 'Escalation' would render with a done checkmark even though it was never visited. Seed dates are non-monotonic: Document Verification (24 Sept) shows before Submitted (26 Sept). All seed dates are relative to the capture date.",
+   "Scheme match % values are hardcoded per scheme (matchScore), not computed from the citizen's profile, despite the subtitle 'ranked against … citizen profile — district, income band and verified documents'. '9 Eligible Schemes' on the dashboard is simply the count of all schemes. Online scheme enrolment does not exist ('Online scheme enrolment is not yet available in Vetri').",
+   "Scheme names, benefits and budgets (₹812 Crore, ₹560 Crore, ₹2,000 Crore, ₹777 Crore, the '5 lakh youth in AI by 2031' target) were 'supplied by the product owner … not re-verified against the published budget document' (schemes2026.ts header). Verify them before showing to a Minister.",
+   "Service fees, timelines and legal bases are labelled 'verified, TN Govt research report' in code, but they are researched values in configuration, not live department data. The docs title says '20-Service Catalog' while the code and UI have 21.",
+   "'Open Grievances: 1' on the dashboard hero is hardcoded (`v: 1`). In MSW, GET /api/complaints always returns only the seed CMP-TN-000452, so a newly filed grievance does NOT appear in the register (the NestJS backend does persist it). The complaint status chip shows the raw camelCase 'inProgress'.",
+   "Grievance routing is a 3-rule category map: everything except Road Damage/Streetlight, including Garbage and Other, routes to 'Metro Water / GCC'. There is no geo-routing. The mobile flow's 'Location Detected — Ward 126, Mylapore' is hardcoded, and its Photo/Video/Audio/File tiles do nothing.",
+   "Emergency is a static directory of tel: links. There is no SOS dispatch, location sharing or live connection.",
+   "Seed data inconsistencies visible on screen: the 'Birth Certificate Approved' notification cites APP-2026-BC-1123, which exists nowhere; 'Service Deadline Tomorrow … June 21' conflicts with the Sept/Oct dates; 'Document Verified … Community Certificate' has no matching wallet document; the wallet's Income Certificate has validity '03/2025' (expired) but shows 'Verified'; the wallet says 'Driving License' while the catalogue says 'Driving Licence'; the timeline says 'GCC Zone 9' while the grievance shows 'GCC - Highways'.",
+   "Profile-based prefill bug: the mobile number prefills as '9198' (digits of the masked '+91 98XXX XXXXX'), which fails 10-digit validation. Aadhaar (12 digits) must be typed. 'Self-Declaration (auto-generated)' is actually an upload field and nothing generates it.",
+   "Assisted services (Driving Licence, Ration Card, Patta etc.) still run the full mock gov.standard.v1 workflow and would deliver a wallet document on approval, although the UI says they finish on the external portal. Do not show a DL/Ration/Patta certificate 'issued by Vetri'.",
+   "Header global search (MSW) indexes the stale db.services list of 9 entries, with old fees like 'Rs.25' and 'Rs.200' that contradict the ₹60 catalogue. Avoid filming search results for services."
+  ],
+  "notes": "Screens that have NOT been captured but are needed for the strongest beats: (1) /service/svc_income at the Overview, Documents and Payment steps; (2) the acknowledgement after submission (reference plus QR); (3) the FileGrievancePanel form with routing preview, and its filed state; (4) the Locker and Notifications after an officer approval, showing the new CRT- tile and 'Certificate Ready'. Because state is in-memory MSW, (2)–(4) must be captured in one browser session without reloading: citizen submits, switch to the officer persona, Approve, back to citizen. Use test values only, e.g. a 10-digit mobile and a 12-digit dummy Aadhaar typed into the local dev app.\n\nThe first new MSW reference will be APP-2026-{code}-44822 (Income → APP-2026-IC-44822, certificate CRT-2026-IC-44822). The first new grievance will be CMP-TN-2026-000453. The NestJS backend uses the same formats (seq = 44821 + count + 1, and 452 + count + 1), so the numbers there depend on how many rows are seeded.\n\nExact lifecycle copy for overlays: 'Submitted → Document Verification → Officer Assigned → Department Queue → Inspection → Remarks → Approval → Digital Signature → Certificate Generation → Delivered to Wallet → Citizen Notified → Completed'. Exceptions: 'Escalation', 'Correction Requested', 'Rejected'.\n\nStep count: 7 steps for fee-bearing services (Income ₹60), 6 for free ones (Birth Certificate).\n\nKey full-page captures: /Users/chandyfolder/vetri-app/motion-studio/captures/raw/desktop/citizen__tracker.full.png, citizen__timeline.full.png, citizen__home.full.png."
+ },
+ {
+  "subsystem": "Platform architecture and scale facts (backend/, src/lib/{integrations,rbac,api,workflow}, docs/*.md)",
+  "purpose": "Vetri Tamil Nadu is one citizen-services platform. A resident signs in with one identity and can apply for 21 Tamil Nadu government services. Every application, whatever the service, moves through the same config-driven workflow (gov.standard.v1, 15 stages). The system assigns an officer in the citizen's district, the officer approves or acts on it in a portal, and the issued certificate goes into the citizen's digital wallet with a notification and a timeline entry. Department, MLA and Admin portals sit on the same data and are separated by RBAC. External government systems sit behind a typed Integration Gateway: 14 capabilities on the frontend and 10 adapters on the backend, all in mock mode today. The frontend is React 19 + Vite 8 and runs fully offline on MSW mocks. The NestJS 10 + Postgres 16/Prisma 5 backend has identical contracts, so going live is a change to the env seam (config/env.ts). Recommended one-sentence definition: \"Vetri Tamil Nadu is a working prototype of a unified Tamil Nadu government services platform. One citizen identity reaches 21 state services, and every application runs through a single 15-stage government workflow from citizen to officer to department, ending with a certificate in the citizen's digital wallet. Officers, departments, MLAs and administrators each get their own role-based portal, and the government-system integrations are mocked today.\" The real-world problem it addresses is only stated qualitatively in code and docs; there are no problem statistics in the repo. Supporting quotes: DesktopLogin.tsx says \"apply, track and receive government services without visiting an office\". OnboardingScreen.jsx has the cards \"One Citizen Identity\", \"Every Service, One Tap\", \"Track Everything\" and \"No Middlemen — Direct access. Transparent timelines. Officer accountability.\" PHASE2.md has \"one platform, all departments\". The catalog itself shows the fragmentation: the 21 services carry 12 distinct department labels, and 9 of them are 'assisted' services that hand off to separate official portals (parivahan.gov.in, tnpds.gov.in, eservices.tn.gov.in/TamilNilam, tnreginet.gov.in). On paperwork, meta.ts ESIGN_NOTE says \"Digitally signed PDFs carry full legal validity under the IT Act, 2000 — no physical stamp needed\", and wallet documents can be reused as attachments. What makes it state-scale (architecturally, not in deployment): (1) the 38 real TN districts are encoded, with a District→Taluk→Village hierarchy in Postgres; (2) one workflow definition serves every service, so adding a service is configuration only (Phase 3.5 added 13 services with 0 routes, 0 APIs and 0 components); (3) one RBAC catalog gates 5 portals; (4) one gateway interface fronts every external system; (5) officer assignment is load-aware by the citizen's district; (6) every mutating request writes an audit-log entry; (7) the platform is bilingual Tamil/English.",
+  "capabilities": [
+   {
+    "name": "Single config-driven Government Workflow Engine (gov.standard.v1)",
+    "what_it_really_does": "There are 15 stages in total: submitted, docVerification, officerAssigned, departmentQueue, inspection, remarks, escalation, approval, digitalSignature, certificateGeneration, walletDelivery, notified, completed, rejected, correctionRequested. The primary path has 12 stages: submitted→Document Verification→Officer Assigned→Department Queue→Inspection→Remarks→Approval→Digital Signature→Certificate Generation→Delivered to Wallet→Citizen Notified→Completed. Escalation, Correction Requested and Rejected are branches off it. Each stage has an actor (citizen, system, department, officer or signatory) and SLAs are set on some stages (docVerification 1 day, inspection 3, approval 2). Officer actions find a legal path by BFS over the transition graph instead of jumping state. When an application reaches walletDelivery, the backend creates a CRT-numbered Document, a 'Certificate Ready' notification and a timeline event. The same definition exists in the frontend (lib/workflow) and the backend (workflow.engine.ts), is seeded as Workflow/WorkflowStep rows, and is used by every service (workflowId default 'gov.standard.v1').",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/backend/src/modules/workflow/workflow.engine.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/workflow/definitions.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/workflow/engine.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/modules/applications/applications.service.ts",
+     "/Users/chandyfolder/vetri-app/backend/prisma/schema.prisma"
+    ],
+    "visual_potential": "An animated pipeline of 12 nodes lighting up in sequence, with three side branches (Escalation, Correction, Rejected) and actor tags under each node. Cut to the real 'Progress timeline' panel on /tracker (citizen__tracker.png) and the Admin tile '15 Workflow Stages' (admin__admin.png)."
+   },
+   {
+    "name": "Integration Gateway (frontend: 14 capabilities)",
+    "what_it_really_does": "Defines a typed adapter interface per capability, a registry with gateway.get(cap) and gateway.register(cap, liveAdapter), and healthAll(). The 14 capabilities are digilocker, parivahan, tamilnilam, esevai, tnega, aadhaar, pan, sms, email, push, payment, maps, geolocation and esign. Their provider strings in the Admin health list are: 'DigiLocker (mock)', 'Parivahan (mock)', 'TamilNilam (mock)', 'e-Sevai (mock)', 'TNeGA (mock)', 'UIDAI (mock)', 'PAN (mock)', 'SMS (mock)', 'Email (mock)', 'Push (mock)', 'Payment (mock)', 'Maps (mock)', 'Geolocation (browser)' and 'eSign (mock DSC)'. All have mode 'mock', and every healthCheck returns ok:true, so the Admin badge always reads 'HEALTHY · MOCK'. Only DigiLocker pullDocument is called by a feature (documentEngine.ts).",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/lib/integrations/types.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/integrations/registry.ts",
+     "/Users/chandyfolder/vetri-app/src/lib/integrations/adapters/mock.ts",
+     "/Users/chandyfolder/vetri-app/src/features/admin/pages/AdminPortal.tsx"
+    ],
+    "visual_potential": "The Admin 'API & INTEGRATION HEALTH' list (admin__admin.png), with 14 rows each carrying a green 'HEALTHY · MOCK' pill. Works as a hub-and-spoke graphic with Vetri at the centre. The word MOCK should stay legible."
+   },
+   {
+    "name": "Government Gateway (backend: 10 adapters × 7 operations)",
+    "what_it_really_does": "NestJS GatewayService registry. GET /api/government/adapters lists the adapters and POST /api/government/:adapter/:op invokes one, restricted to the ADMIN, DEPARTMENT and OFFICER roles. Each adapter supports validate|fetch|submit|update|track|download|status. Adapter names, verbatim: 'UIDAI Aadhaar', 'DigiLocker', 'Transport / RTO (Vahan-Sarathi)', 'Revenue Department (e-Sevai / TNeGA)', 'Greater Chennai Corporation', 'TN Police (e-Challan / Verification)', 'State Transport (TNSTC)', 'Treasury & Accounts (IFHRMS)', 'Payment Gateway (BharatKosh / UPI)', 'Certificate Authority (e-Sign / DSC)'. All are BaseMockAdapter subclasses that return deterministic, realistically shaped payloads. The status op always returns { available: true, latencyMs: 42, uptime: '99.9%' }. The DigiLocker adapter returns the note 'DigiLocker live integration pending official onboarding'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/backend/src/integrations/adapters/index.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/integrations/adapters/base.adapter.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/integrations/gateway.service.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/integrations/gateway.controller.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/integrations/gateway.types.ts"
+    ],
+    "visual_potential": "A type-on list of the 10 department and system names, each connecting by a line into one 'Gateway' bar. The 7 verbs can pulse along the lines. There is no UI screen for this; it would be motion graphics built from the code strings."
+   },
+   {
+    "name": "RBAC: 5 roles, 12 permissions, 5 portals",
+    "what_it_really_does": "The frontend roles are citizen, officer, department, mla and admin. The 12 permissions are citizen:read, citizen:write, application:create, application:read, application:process, complaint:create, complaint:read, complaint:resolve, document:read, document:issue, analytics:read and admin:manage. Role home routes are /home, /officer, /department, /mla-portal and /admin. Routes are guarded by RoleRoute require=['application:process'] (officer), ['analytics:read'] (department, MLA) and ['admin:manage'] (admin). The backend mirrors the same catalog and adds a 6th role, SUPPORT, which has no portal. Guards run in a fixed global order: Throttler → JWT → Roles.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/lib/rbac/roles.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/modules/auth/rbac.ts",
+     "/Users/chandyfolder/vetri-app/src/app/router/AppRouter.tsx",
+     "/Users/chandyfolder/vetri-app/backend/src/app.module.ts"
+    ],
+    "visual_potential": "The /demo 'Presentation Mode' screen (04_demo.png) with its 5 'ENTER AS' persona cards: Citizen 'Chandramoulishwarar K · Mylapore', Officer 'Tmt. R. Kalaivani · Revenue Inspector', Department 'Revenue & Disaster Management', MLA 'Mylapore Assembly Constituency', Super Admin 'Platform administration'. This is the clearest single image of citizen ↔ officer ↔ department ↔ MLA ↔ admin."
+   },
+   {
+    "name": "Citizen → Officer → Department → MLA → Admin data loop",
+    "what_it_really_does": "1. The citizen submits; the backend generates APP-2026-<code>-<seq> (21 service prefixes: IC, CC, BC, DC, MC, DL, RC, PT, RES, NAT, LH, EC, CHT, ADG, FMB, RCT, DRC, MVT, ECH, PTX, WTR) and writes a notification and a timeline event. 2. At officerAssigned, the system picks the officer in the citizen's district with the fewest active applications. 3. In the officer portal the officer can Approve & Issue, Request Correction, Escalate, Transfer or Reject; each action writes an AuditLog row and a citizen notification. 4. Department and MLA analytics add live application counts on top of seeded baseline aggregates. 5. Admin sees the audit trail (up to 200 rows), sends broadcasts to every citizen's notifications, and controls feature flags. Separately, AuditInterceptor logs every POST/PUT/PATCH/DELETE.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/backend/src/modules/applications/applications.service.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/modules/officer/officer.service.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/modules/analytics/analytics.service.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/common/interceptors/audit.interceptor.ts",
+     "/Users/chandyfolder/vetri-app/src/mocks/handlers/officer.ts",
+     "/Users/chandyfolder/vetri-app/docs/PHASE3.md"
+    ],
+    "visual_potential": "Follow one reference number, APP-2026-IC-44821, across 4 real screens: the citizen tracker (officer 'Tmt. R. Kalaivani · Revenue Inspector', '3 days remaining under the Right to Service charter'), the officer work queue (officer__officer.png), the department tiles (department__department.png), and the MLA constituency view (mla__mla-portal.png)."
+   },
+   {
+    "name": "Metadata-driven service catalog (21 services, 21 forms)",
+    "what_it_really_does": "SERVICE_META has 21 entries: 12 digital and 9 assisted. Each entry carries the official service code, legal basis and Acts, officer hierarchy, issuing/escalation/appeal authorities, the govt-fee vs e-Sevai-charge split, SLA, validity, digital features and source URL. There is one Form Engine definition per service (21 form_* ids). Category counts shown on /services: All 21, Certificates 8, Transport 5, Revenue 5, Welfare 1, Municipal 2. Example codes: REV-103 Income, REV-101 Community, CRS-BIRTH, CRS-DEATH, IGR-301 Marriage, SARATHI-DL, TNPDS, REV-501 Patta, REV-116 Residence, REV-102 Nativity, REV-114 Legal Heir, TNREG-EC, REV-CHITTA, REV-ADANGAL, REV-FMB, TRN-RC-TRANS, TRN-DUP-RC, TRN-MV-TAX, TRN-ECHALLAN, ULB-PT, ULB-WT.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/services/catalog/meta.ts",
+     "/Users/chandyfolder/vetri-app/src/features/services/catalog/forms.ts",
+     "/Users/chandyfolder/vetri-app/docs/PHASE3.5-SERVICES.md"
+    ],
+    "visual_potential": "The /services page (citizen__services.png) with the filter pills 'All · 21 | Certificates · 8 | Transport · 5 | Revenue · 5 | Welfare · 1 | Municipal · 2' and the department chips. A count-up to 21, then cards fanning out by department."
+   },
+   {
+    "name": "Data model and seeded geography (Postgres via Prisma)",
+    "what_it_really_does": "34 Prisma models and 9 enums. Models: User, Permission, RefreshToken, Session, Otp, Citizen, Address, District, Taluk, Village, Department, Officer, Mla, ServiceCategory, Service, Workflow, WorkflowStep, Application, TimelineEvent, Comment, Document, Attachment, Complaint, Notification, Scheme, EligibilityRule, Payment, Conversation, AiMessage, AuditLog, FeatureFlag, Announcement, Faq, SupportTicket. Core entities use UUID PKs, soft delete (deletedAt) and a version column. The seed creates all 38 real TN districts; Chennai gets 6 named taluks and every other district gets 3 generated ones ('X (North)', 'X (South)', 'X (Rural)'), which makes 117 taluks and 351 generated villages. It also seeds 20 departments, 100 officers, 8 categories (including 'All'), 20 services, 9 schemes, 1,001 citizens, 500 applications and 200 complaints.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/backend/prisma/schema.prisma",
+     "/Users/chandyfolder/vetri-app/backend/prisma/seed.ts",
+     "/Users/chandyfolder/vetri-app/backend/README.md"
+    ],
+    "visual_potential": "A map of TN with all 38 district names; the list is real and lives in seed.ts and geo.ts. Zoom into a District→Taluk→Village tree. The Admin tile '38 Districts' is the real UI anchor. Seed counts can be shown as 'demo dataset' figures only."
+   },
+   {
+    "name": "Backend API surface and hardening",
+    "what_it_really_does": "34 HTTP endpoints: 31 business routes under /api, 2 gateway routes and /health, plus Swagger at /api/docs. There are 13 module directories (auth, workflow, applications, catalog, documents, notifications, citizen, officer, analytics, complaints, search, ai, health) plus the Prisma and Integrations modules. Hardening: JWT access tokens (default TTL 900 s) with rotating refresh tokens (default 1,209,600 s, i.e. 14 days); bcrypt-hashed OTPs that expire after 5 minutes; Helmet; a throttle of 120 requests per 60 s; pino logs that redact the authorization header, OTP and refresh token; AllExceptionsFilter returning normalised { statusCode, message, fieldErrors, path, timestamp }; and a Docker Compose stack of postgres, redis, backend and pgadmin. The frontend lib/api client adds timeouts, exponential-backoff retry, 401→refresh→retry, Zod validation of every response, and a normalised ApiError.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/backend/src/main.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/app.module.ts",
+     "/Users/chandyfolder/vetri-app/backend/src/config/configuration.ts",
+     "/Users/chandyfolder/vetri-app/backend/INTEGRATION.md",
+     "/Users/chandyfolder/vetri-app/src/lib/api/client.ts",
+     "/Users/chandyfolder/vetri-app/backend/docker-compose.yml"
+    ],
+    "visual_potential": "Best kept to a 1-second architecture-stack beat with the layers from PHASE3.md section 11: Presentation (Citizen App, Officer, Dept, MLA, Admin) / Router + RBAC / Engines / Data plane / Integration Gateway / Backend. Too technical for a Minister beyond that one beat."
+   },
+   {
+    "name": "Two experiences, one route table",
+    "what_it_really_does": "The selector screen offers '📱 Mobile Super App' (FOR CITIZENS) and '🖥️ Government Web Portal' (FOR OFFICIALS & PRESENTATIONS) under the line 'Same secure services. Two ways to use them.' AppRouter takes a variant prop that swaps only the presentation; routes, guards, API calls and business logic are shared.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/app/router/AppRouter.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/00_selector.png"
+    ],
+    "visual_potential": "00_selector.png: maroon field, TN seal, 'Vetri Tamil Nadu / வெற்றி தமிழ்நாடு · Government Super App' and two cards. A strong title or transition frame."
+   },
+   {
+    "name": "Bilingual (Tamil + English) and Ask Vetri reasoning pipeline",
+    "what_it_really_does": "Lang = 'en' | 'ta'. translations.ts holds about 118 en→ta UI string pairs. Services carry nameTamil (e.g. 'வருமானச் சான்றிதழ்') and schemes carry nameTamil/benefitTamil. Voice uses the Web Speech API for ta-IN and en-IN. Ask Vetri is deterministic, with no LLM: intent engine → citizen context → planner → 8 typed tools (wallet.list, wallet.coverage, applications.list, applications.forService, service.meta, schemes.match, timeline.predict, navigate.build) → bilingual response composer. It knows 9 life events: bereavement, marriage, propertyPurchase, migration, birth, vehiclePurchase, education, retirement, farming.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/lib/i18n/translations.ts",
+     "/Users/chandyfolder/vetri-app/src/features/ai/engine/types.ts",
+     "/Users/chandyfolder/vetri-app/src/features/ai/knowledge/lifeEvents.ts",
+     "/Users/chandyfolder/vetri-app/docs/PHASE4.md",
+     "/Users/chandyfolder/vetri-app/src/hooks/useVoice.ts"
+    ],
+    "visual_potential": "The 'தமிழ்' toggle in the desktop header flips the UI. The Tamil greeting 'வணக்கம்,' on the dashboard hero (citizen__home.png)."
+   }
+  ],
+  "real_data": [
+   "21 Services, 38 Districts, 5 Roles, 15 Workflow Stages, 14 Integrations: Admin Overview stat tiles, computed live from SERVICE_META.length, TN_DISTRICTS.length, ROLE_PERMISSIONS keys, STANDARD_GOV_WORKFLOW.stages.length and the healthAll() key count (AdminPortal.tsx; admin__admin.png)",
+   "'99.9%' Uptime: Admin tile, a HARDCODED string (AdminPortal.tsx line 'value=\"99.9%\"')",
+   "Admin integration rows: 'DigiLocker (mock)', 'Parivahan (mock)', 'TamilNilam (mock)', 'e-Sevai (mock)', 'TNeGA (mock)', 'UIDAI (mock)', 'PAN (mock)', 'SMS (mock)', 'Email (mock)', 'Push (mock)', 'Payment (mock)', 'Maps (mock)', 'Geolocation (browser)', 'eSign (mock DSC)', each tagged 'HEALTHY · MOCK' (src/lib/integrations/adapters/mock.ts, registry.ts)",
+   "Backend adapter names: 'UIDAI Aadhaar', 'DigiLocker', 'Transport / RTO (Vahan-Sarathi)', 'Revenue Department (e-Sevai / TNeGA)', 'Greater Chennai Corporation', 'TN Police (e-Challan / Verification)', 'State Transport (TNSTC)', 'Treasury & Accounts (IFHRMS)', 'Payment Gateway (BharatKosh / UPI)', 'Certificate Authority (e-Sign / DSC)' (backend/src/integrations/adapters/index.ts)",
+   "Gateway ops: 'validate' | 'fetch' | 'submit' | 'update' | 'track' | 'download' | 'status' (backend/src/integrations/gateway.types.ts)",
+   "Workflow id 'gov.standard.v1', name 'Standard Government Service' (frontend) / 'Government Standard Workflow' (seed). Stage labels: 'Submitted', 'Document Verification', 'Officer Assigned', 'Department Queue', 'Inspection', 'Remarks', 'Escalation', 'Approval', 'Digital Signature', 'Certificate Generation', 'Delivered to Wallet', 'Citizen Notified', 'Completed', 'Rejected', 'Correction Requested' (src/lib/workflow/definitions.ts)",
+   "Roles: citizen, officer, department, mla, admin; home routes '/home', '/officer', '/department', '/mla-portal', '/admin' (src/lib/rbac/roles.ts). Backend adds SUPPORT → '/support' (backend/src/modules/auth/rbac.ts)",
+   "Persona cards: 'Citizen / Chandramoulishwarar K · Mylapore', 'Officer / Tmt. R. Kalaivani · Revenue Inspector', 'Department / Revenue & Disaster Management', 'MLA / Mylapore Assembly Constituency', 'Super Admin / Platform administration' (src/features/demo/pages/DemoMode.tsx; 04_demo.png)",
+   "Demo SCRIPT: 'Citizen logs in with OTP / biometric' … 'Switch to Officer — review, verify, approve & issue' … 'Certificate lands in the citizen Wallet + notification' … 'Open MLA Dashboard — constituency analytics' … 'Close with the Digital Citizen Timeline' (DemoMode.tsx)",
+   "Service category pills: 'All · 21', 'Certificates · 8', 'Transport · 5', 'Revenue · 5', 'Welfare · 1', 'Municipal · 2' (citizen__services.png; meta.ts has 12 digital + 9 assisted)",
+   "Service codes: REV-103 Income Certificate ₹60 '7–15 working days'; REV-101 Community ₹60; CRS-BIRTH 'Free within 21 days'; IGR-301 Marriage; SARATHI-DL 'LLR ₹200 · DL ₹700 (single) / ₹1,000 (dual)'; TNPDS Ration 'Free (Gov ₹0)'; REV-501 Patta; REV-116; REV-102; REV-114; TNREG-EC; REV-CHITTA; REV-ADANGAL; REV-FMB; TRN-RC-TRANS; TRN-DUP-RC; TRN-MV-TAX; TRN-ECHALLAN; ULB-PT; ULB-WT (src/features/services/catalog/meta.ts)",
+   "The 38 TN districts as listed in geo.ts: Ariyalur, Chengalpattu, Chennai, Coimbatore, Cuddalore, Dharmapuri, Dindigul, Erode, Kallakurichi, Kancheepuram, Kanniyakumari, Karur, Krishnagiri, Madurai, Mayiladuthurai, Nagapattinam, Namakkal, Nilgiris, Perambalur, Pudukkottai, Ramanathapuram, Ranipet, Salem, Sivaganga, Tenkasi, Thanjavur, Theni, Thoothukudi, Tiruchirappalli, Tirunelveli, Tirupathur, Tiruppur, Tiruvallur, Tiruvannamalai, Tiruvarur, Vellore, Viluppuram, Virudhunagar (src/features/services/catalog/geo.ts)",
+   "Seeded volume: '38 TN districts (+ taluks + villages) · 20 departments · 100 officers · 8 service categories · 20 flagship services · 100 welfare schemes · 1,001 citizens · 500 applications · 200 complaints'. Quoted from backend/README.md; the '100 welfare schemes' part is STALE, because seed.ts now seeds 9 schemes",
+   "Seed departments (20): 'Revenue & Disaster Management', 'Civil Supplies & Consumer Protection', 'Transport', 'Municipal Administration & Water Supply', 'Greater Chennai Corporation', 'Health & Family Welfare', 'School Education', 'Higher Education', 'Social Welfare', 'Agriculture', 'Registration', 'Rural Development & Panchayat Raj', 'Labour & Employment', 'Housing & Urban Development', 'Adi Dravidar & Tribal Welfare', 'Backward Classes Welfare', 'Handlooms & Textiles', 'Environment & Forests', 'Public Works', 'Electricity (TANGEDCO)' (backend/prisma/seed.ts)",
+   "9 schemes (2026 catalogue): Annanin Seer Scheme ₹812 Crore, Thai Maaman Thanga Modhiram Scheme ₹560 Crore, Vetri Laptop Scheme ₹2,000 Crore, Modern Bicycle Scheme ₹777 Crore, Vetri Skill Training Scheme, Vetri Housing Scheme, Vetri Women's Goat Rearing Scheme, Digital Library Initiative, PM Kisan Samman Nidhi '₹6,000 per year' (src/features/schemes/catalog/schemes2026.ts)",
+   "Reference numbers: APP-2026-IC-44821 (Income, in progress), APP-2026-CC-44903 (Community, frontend mock; the backend seed uses APP-2026-CC-44655), APP-2026-BC-1123 (Birth, completed), CMP-TN-000452 (Road Damage, 'GCC Zone 9'), CMP-TN-2026-000453 (generated live in CP4/CP5), certificate CRT-2026-IC-44821 (docs/PHASE3.md)",
+   "Citizen persona: 'Chandramoulishwarar K', CAN 'TN-2024-XXXX-8842', Aadhaar 'XXXX XXXX 8842', Chennai · Mylapore, verified via 'Aadhaar + DigiLocker'. Wallet docs: DL-TN-2024-8842, BC-TN-2002-4421, IC-TN-2024-9912 (validity 03/2025, expired), RC-TN-CHN-7788 (backend/prisma/seed.ts, src/mocks/db.ts)",
+   "Login copy: 'One citizen identity for every government service.' / 'The official digital gateway of the Government of Tamil Nadu — apply, track and receive government services without visiting an office.' / 'Apply for 20+ services' / 'Track under Right to Service' / 'Verified digital documents' / 'Transparent governance' (src/features/auth/pages/DesktopLogin.tsx; 03_login.png)",
+   "Onboarding cards: 'One Citizen Identity' (ஒரே குடிமகன் அடையாளம்), 'Every Service, One Tap', 'Track Everything', 'No Middlemen — Direct access. Transparent timelines. Officer accountability.' (src/features/auth/pages/OnboardingScreen.jsx)",
+   "Selector: 'Choose Your Experience' / 'Same secure services. Two ways to use them.' / 'Mobile Super App' / 'Government Web Portal' (00_selector.png)",
+   "Department tiles: 36 Today, 1180 This Month, 128 Pending, 982 Approved, 41 Rejected, 4.6d Avg SLA, 17 Overdue, 9 Escalations, 96% On-time. Seeded base constants plus live counts (analytics.service.ts: 'today: 34 + live.total, month: 1180 …'; department__department.png)",
+   "MLA tiles (Mylapore Constituency): 4,233 Submitted, 3,867 Completed, 298 Pending, 5.2d Avg Resolution, 4.3/5 Satisfaction, 78% Scheme Uptake; dept performance Revenue 94%, Civil Supplies 91%, GCC 87%, Transport 84%, Registration 82%. Seeded base constants plus live counts (analytics.service.ts; mla__mla-portal.png)",
+   "Officer stats: completedThisMonth 47, avgProcessingDays 4.2, approvalRate 92, citizenRating 4.6, slaCompliance 96, departmentRank 3. HARDCODED in backend/src/modules/officer/officer.service.ts stats()",
+   "Admin 'Manage' tab strings: 'Citizens 1 seeded · CAN-linked', 'Officers 4 active', 'Departments 9 mapped', 'Integration adapters 11 registered'. Hardcoded and stale versus the 14 shown on Overview (AdminPortal.tsx)",
+   "Feature flags (6): aiAssistant, voiceInput, proactiveSuggestions, walletSharing, emergencySos, schemeDiscovery (src/store/featureFlagStore.ts)",
+   "Emergency numbers on dashboard: Police 100, Ambulance 108, Fire 101, Emergency 112 (citizen__home.png)",
+   "Complaint routing: Road Damage/Water Supply → High, ETA 5 days; Streetlight/Drainage → Medium; others Low, ETA 7. Department 'GCC - Highways' or 'Metro Water / GCC' (src/features/complaints/routing.ts, backend complaint.routing.ts)",
+   "Backend stack strings: 'NestJS 10 · TypeScript (strict) · Node 20', 'PostgreSQL 16 · Prisma 5', 'JWT access + rotating refresh tokens · Passport · bcrypt', Swagger title 'Vetri Tamil Nadu API', description 'Digital Governance Platform — REST API' (backend/README.md, backend/src/main.ts)"
+  ],
+  "strongest_moments": [
+   "/demo Presentation Mode (04_demo.png). Five persona cards stacked (Citizen, Officer, Department, MLA, Super Admin), each with a real name or jurisdiction, above 'THE ONE CONTINUOUS STORY' numbered script. It is the single most literal picture of 'one platform connecting citizen ↔ officer ↔ department ↔ MLA ↔ admin', and every card is a real login through the auth pipeline.",
+   "Admin Overview (admin__admin.png). Six stat tiles (21 Services, 38 Districts, 5 Roles, 15 Workflow Stages, 14 Integrations, 99.9% Uptime) above the 'API & INTEGRATION HEALTH' list. Five of the six numbers are computed from real registries, which makes this the best 'scale facts' frame. Crop or replace the 99.9% Uptime tile, which is hardcoded.",
+   "The workflow pipeline. Animate the 12-stage primary path from 'Submitted' to 'Completed', with its 3 branches, from definitions.ts, then cut to the real 'Progress timeline' on /tracker (citizen__tracker.png) for APP-2026-IC-44821 with officer 'Tmt. R. Kalaivani · Revenue Inspector' and '3 days remaining under the Right to Service charter'. It shows accountability and the 'one engine for every service' idea.",
+   "The Services catalog (citizen__services.png). 'All · 21' plus the category pills and department chips ('Revenue & Disaster Management Department · 4', 'Revenue Department · 4', 'Transport Department (MoRTH) · 3', 'Registration Department (IGR) · 2' …). Visually shows many departments gathered into one surface.",
+   "The two-experiences selector (00_selector.png). TN seal, 'Vetri Tamil Nadu', 'Same secure services. Two ways to use them.' with Mobile Super App and Government Web Portal cards. A clean opening or closing title card that is entirely real UI.",
+   "The 38-district map plus the gateway hub (motion graphics built from real strings). All 38 district names from geo.ts and seed.ts light up, then the 10 backend adapter names ('UIDAI Aadhaar', 'DigiLocker', 'Transport / RTO (Vahan-Sarathi)', 'TN Police (e-Challan / Verification)', 'Treasury & Accounts (IFHRMS)' …) connect into one Gateway. A label such as 'integration-ready' or 'mock' is needed to stay honest."
+  ],
+  "honesty_flags": [
+   "NO LIVE GOVERNMENT INTEGRATIONS. All 14 frontend capabilities and all 10 backend adapters are mocks (mode: 'mock', GATEWAY_MODE=mock). healthCheck always returns ok. Do not say 'connected to Aadhaar/DigiLocker/Parivahan/TNeGA'; say 'integration-ready adapters' or 'built to plug into'. The 'Import from DigiLocker' button is deliberately disabled, labelled 'coming when official integration becomes available'.",
+   "NOT DEPLOYED / NO REAL USERS. Captures run offline on MSW mock data. Per backend/README.md and INTEGRATION.md, live HTTP round-trips against Postgres were 'wired and ready, not claimed as executed' in the build sandbox. Do not claim citizens served, applications processed, or a statewide rollout.",
+   "'38 districts' means geography reference data (district dropdowns plus generated North/South/Rural taluks and 'Village 1/2/3' rows in the seed), not operational coverage. Analytics only show 5 districts (Chennai 1,180, Coimbatore 964, Madurai 842, Trichy 733, Salem 651) and only 1 constituency (Mylapore). Say 'designed for all 38 districts', not 'live across 38 districts'.",
+   "Dashboard and analytics figures are seeded demo aggregates, not government statistics. That covers Department (1180/month, 982 approved, 4.6d SLA, 96% on-time), MLA (4,233 submitted, 4.3/5 satisfaction, 78% scheme uptake, ward heat map) and Officer (47 done, 92% approval, 4.6/5, 96% SLA). The code calls them 'charter-plausible seeded aggregates', with only live demo-application counts added on top. The '99.9% Uptime' Admin tile and the backend status() 'uptime: 99.9%' are hardcoded.",
+   "Seed volumes (1,001 citizens, 500 applications, 200 complaints, 100 officers) are synthetic demo data generated from 20 first names × 10 last names. They are not real records and not a measure of capacity.",
+   "Service count is inconsistent across layers. The frontend catalog and Admin tile say 21, the backend seed has 20 with a different mix (it includes Old Age Pension and Hospital Appointment and omits Adangal, FMB and e-Challan), and the login says '20+'. Use '21 services' only when referring to the shown portal, or '20+'. Do not claim '100+ services'.",
+   "Only 12 of the 21 services complete inside Vetri with a certificate to the wallet (mode 'digital'). The other 9 are 'assisted': Driving Licence, Ration Card, Patta Transfer, RC Transfer, Duplicate RC, Vehicle Tax, e-Challan, Property Tax and Water Charges. They collect and prefill data and then hand off to Parivahan, TNPDS, TamilNilam or a ULB portal. Do not say 'all services end-to-end in one app'.",
+   "Welfare scheme count is 9, not 100. The backend README line '100 welfare schemes' is stale; seed.ts now seeds 9 with 'no padding'. Scheme budgets (₹812 Cr, ₹560 Cr, ₹2,000 Cr, ₹777 Cr, about ₹4,149 Cr across 4 schemes) are flagged in schemes2026.ts as supplied by the product owner and 'have not been re-verified against the published budget document'. Do not present them as verified. The '9 Eligible Schemes' hero tile is the catalogue count, not a computed eligibility result.",
+   "Integration count conflicts. The Admin Overview shows 14 (frontend capabilities, with TNeGA reusing the e-Sevai mock), the backend has 10, the Admin 'Manage' tab hardcodes '11 registered', and docs cite 11 (Phase 1) then 14 (Phase 3). Pick one and attribute it, e.g. '14 integration adapters (mock)' on the frontend admin screen.",
+   "Roles: say 5 (frontend portals). The backend enum has 6 (SUPPORT), but SUPPORT has no portal or route.",
+   "AI is not an LLM. Ask Vetri is a deterministic intent→plan→tools→compose pipeline (PHASE4.md honesty note: 'no live LLM'). The backend AI service uses regex intent rules. Do not say 'powered by generative AI' or 'understands any question'.",
+   "OTP and SMS are not sent. The backend uses a fixed OTP of '123456' in mock mode, MSW accepts any 6 digits, and biometric login is a one-tap mock. The login copy 'We will send a one-time password to your Aadhaar-linked mobile number' describes intended behaviour. Also, 'Vetri never stores your Aadhaar number or OTP' is loose: the DB stores aadhaarMasked and a bcrypt OTP hash.",
+   "Payments are not processed. The service-flow Payment step only records the chosen method ('no card or UPI credentials are captured here'). The Payment model exists, but there is no payment endpoint. Do not claim 'pay fees online'.",
+   "No backend document storage. The upload UI validates and previews client-side, but there is no upload endpoint (the Attachment model is unused by the API). eSign and 'Digital Signature' is a workflow stage with a mock adapter, not a real DSC. Certificates are records, not generated signed PDFs (server-side PDF generation is listed as remaining work in PHASE2.md).",
+   "Redis and BullMQ are installed and in docker-compose, but no queues are implemented ('queues-ready'; backend/src/jobs is an empty directory). Do not claim async job processing or scale-out.",
+   "Notifications are in-app only. The SMS, email and push adapters are mocks, and Admin 'Broadcast' writes in-app notification rows.",
+   "'Official' branding: the UI banner reads 'Government of Tamil Nadu · Official Citizen Services Portal' and uses the state seal, and the login says 'The official digital gateway of the Government of Tamil Nadu'. This is a pitch prototype for a Minister, not an officially sanctioned portal. The film should not assert official status or government endorsement.",
+   "There are no problem statistics in the repo (no counts of offices, visits, days saved, middlemen, or paperwork reduction). Any quantified 'before/after' claim would be invented. Only the qualitative framing quoted from DesktopLogin.tsx, OnboardingScreen.jsx and PHASE2.md is supported.",
+   "In the department, MLA and officer portal captures, the desktop shell header still shows the citizen 'Chandramoulishwarar' account chip. Avoid lingering on the header in those shots, or crop to the portal body."
+  ],
+  "notes": "Recommended defensible on-screen facts for a 20-second film: '21 government services', '1 citizen identity', '1 workflow · 15 stages' (or '12-step journey from Submitted to Wallet'), '5 role-based portals: Citizen · Officer · Department · MLA · Admin', 'Built for all 38 districts', 'Tamil + English', '14 integration-ready adapters (mock today)'. Workflow wording: '15 stages' matches the Admin tile and code. If you show the linear journey, it is 12 stages; escalation is a branch, not a step on the main path. Primary source files: /Users/chandyfolder/vetri-app/src/lib/workflow/definitions.ts, /Users/chandyfolder/vetri-app/src/lib/rbac/roles.ts, /Users/chandyfolder/vetri-app/src/lib/integrations/types.ts, /Users/chandyfolder/vetri-app/backend/src/integrations/adapters/index.ts, /Users/chandyfolder/vetri-app/backend/prisma/schema.prisma, /Users/chandyfolder/vetri-app/backend/prisma/seed.ts, /Users/chandyfolder/vetri-app/src/features/services/catalog/meta.ts, /Users/chandyfolder/vetri-app/src/features/schemes/catalog/schemes2026.ts, /Users/chandyfolder/vetri-app/src/features/admin/pages/AdminPortal.tsx, /Users/chandyfolder/vetri-app/src/features/demo/pages/DemoMode.tsx. Best screenshots: /Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/04_demo.png, admin__admin.png, 00_selector.png, citizen__services.png, citizen__tracker.png, 03_login.png. Docs record their own quality gates (tsc 0 errors, eslint 0, vite build green with 77 chunks, zero console errors). The backend has only been verified statically (tsc clean, nest build, prisma validate). The Phase 3.5 fact '13 services added with 0 routes, 0 APIs, 0 components added' is the strongest evidence that the platform scales by configuration."
+ },
+ {
+  "subsystem": "Visual identity + UI geometry (theme tokens, desktop portal chrome, UI primitives, TN seal, icon set, Tamil i18n layer, shells, splash/onboarding/login)",
+  "purpose": "This is the look the citizen sees. One React codebase renders the same routes in two presentations. The Experience Selector (always the official maroon) picks one. The splash intro plays before either presentation, then the app shows either a 430px mobile frame (MobileShell) or a fluid government web portal (DesktopShell). The portal is a three-band masthead (dark maroon strip, crimson brand bar, 3px gold rule) over a white tab nav, a light grey page with a sticky left rail, and a crimson gradient hero carrying a faded TN-emblem watermark. Everything comes from one 17-token palette (crimson pri / maroon acc / gold sec) in Inter + Noto Sans Tamil with lucide outline icons. Tamil appears as a second line under English brand text and on scheme and service names.",
+  "capabilities": [
+   {
+    "name": "Colour token system (light + dark)",
+    "what_it_really_does": "src/styles/theme.ts exports lightColors/darkColors, which useC() selects by uiStore.dark, plus high-contrast overrides. LIGHT: pri #9B1B30, priDk #7A1526, acc #6B1D2A, sec #D4A843, secDk #B8922E, secLt #E8C66A, bg #FFFFFF, bgAlt #F7F7FA, card #FFFFFF, txt #1C1C1E, txt2 #6B7280, txt3 #9CA3AF, ok #059669, warn #D97706, err #DC2626, info #2563EB, bdr #E5E7EB. DARK: pri #E8485C, priDk #C4354E, acc #9B1B30, sec #E8C66A, secDk #D4A843, secLt #F0D88A, bg #0F172A, bgAlt #1E293B, card #1E293B, txt #F1F5F9, txt2 #94A3B8, txt3 #64748B, ok #34D399, warn #FBBF24, err #F87171, info #60A5FA, bdr #334155. HIGH CONTRAST: txt #000/#FFF, txt2 #374151/#E2E8F0, bdr #9CA3AF/#475569. Colours outside the palette: #4E1220 (deepest stop, selector gradient only) and #3A2A05 (dark-brown text on gold buttons, badges and the avatar). Tints are hex-alpha suffixes on pri: 0A, 0D, 0F, 12, 14, 15, 18, 59. Gold tints: sec+22 behind the POPULAR badge, sec+0A on unread rows. Gradients: selector linear-gradient(160deg,#9B1B30 0%,#6B1D2A 55%,#4E1220 100%); splash 180deg pri→acc plus radial-gradient(circle at 50% 30%, rgba(212,168,67,0.08), transparent 60%); hero 135deg pri→acc; login hero 150deg pri→acc; role-portal banners 135deg acc→priDk; gold Btn 135deg sec→secDk; shimmer 90deg sec→secLt→sec. Measured contrast: white on #9B1B30 is 8.1:1, #D4A843 on #9B1B30 is 3.66:1, #E8C66A on #9B1B30 is 4.9:1, #D4A843 on #6B1D2A is 5.17:1, #3A2A05 on #D4A843 is 6.27:1.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/styles/theme.ts",
+     "/Users/chandyfolder/vetri-app/src/hooks/useUi.ts",
+     "/Users/chandyfolder/vetri-app/src/app/shells/ExperienceSelector.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/auth/pages/SplashScreen.jsx"
+    ],
+    "visual_potential": "Use as the film's grade ladder: #4E1220 → #6B1D2A → #7A1526 → #9B1B30 as a night field, with gold #D4A843/#E8C66A held to light, rules and small type. Keep gold small: at 3.66:1 on crimson it is accent-only. A white or #F7F7FA field gives the daylight UI scenes."
+   },
+   {
+    "name": "Government masthead (3 bands + nav)",
+    "what_it_really_does": "DesktopHeader is sticky (z 50). Heights measured from the 1920px capture: (1) Official strip, 0–40px, bg acc #6B1D2A, 12px text at rgba(255,255,255,.85). Left: ShieldCheck 13px in gold + 'Government of Tamil Nadu · Official Citizen Services Portal'. Right: Languages 'தமிழ்', Moon 'Dark', Smartphone 'Switch Experience'. (2) Brand bar, 40–114px (74px), bg pri #9B1B30 with borderBottom 3px solid #D4A843 at 114–117px. It holds Seal 46px, the 'Vetri Tamil Nadu' wordmark (19px/800, letterSpacing -0.3, white) and the subline 'வெற்றி தமிழ்நாடு · e-Sevai Digital Services' (11px, white 66%, ls .3). The search pill is max 460px, r12, bg white 14%, border white 18%, placeholder 'Search services, certificates, schemes…'. Then a solid gold 40×40 r12 Sparkles tile (Ask Vetri), a Bell tile with a gold count badge (#3A2A05 text, 10px/800), and a user chip with gold initials square 'CK' 30px r9 + 'Chandramoulishwarar' / 'TN-2024-XXXX-8842' + ChevronDown. (3) DesktopNavigation, 117–164px, white with a 1px #E5E7EB bottom border. 8 tabs, 13.5px, padding 14px 16px. Inactive tabs are txt2 / weight 500 / stroke 1.8; the active tab is pri / weight 700 / stroke 2.2 with a 3px pri underline. The page bg #F7F7FA starts at 165px and the main padding-top is 28px.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopHeader.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopNavigation.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/navItems.ts",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__home.png"
+    ],
+    "visual_potential": "A ready-made band transition: wipe in maroon 40px, then crimson 74px, then a 3px gold line drawing left to right, then the white nav. Slide the active 3px underline from tab to tab to change module scenes. The gold Sparkles tile is the single visual entry to 'Ask Vetri'."
+   },
+   {
+    "name": "Module icon set (lucide-react, outline)",
+    "what_it_really_does": "Every icon is lucide-react outline at stroke 1.7–1.8 (2.2 when active), mostly 16–20px. Icons usually sit in a tinted rounded-square tile: 42px r12 at pri+0D in Quick Services, 38px r11 at white 14% in the hero, 50px r15 in the selector. NAV: Dashboard LayoutGrid · Services FileText · Applications Timer · Digital Locker Wallet · Grievances AlertTriangle · Schemes Sparkles · Transparency BarChart3 · Help LifeBuoy. HEADER: Search, Sparkles (Ask Vetri), Bell, ChevronDown, Sun/Moon, Languages, Smartphone, LogOut, User, ShieldCheck. RAIL: BadgeCheck (verified), QrCode, User, ChevronRight; emergency Phone Police 100 #DC2626 · HeartPulse Ambulance 108 #059669 · Flame Fire 101 #EA580C · Siren Emergency 112 #2563EB. HERO STATS: Timer, Wallet, Sparkles, AlertTriangle; CTA ArrowRight. DASHBOARD: FileCheck Recent Applications, Megaphone Announcements, AlertTriangle Grievance Timeline, BadgeCheck Digital Locker, Sparkles on every scheme card (tinted per scheme colour), Building2 departments, CheckCircle2 timeline steps. SERVICE CATALOGUE (meta.ts icon strings resolved by iconRegistry): IndianRupee Income · Users Community/Marriage/Ration/Legal Heir · FileCheck Birth/Death · Car DL/RC Transfer/Duplicate RC · Scale Patta/Chitta · Home Residence · MapPin Nativity · ScrollText Encumbrance · Wheat Adangal · Map FMB · Receipt Vehicle Tax · AlertTriangle e-Challan · Building2 Property Tax · Droplet Water. LOGIN: FileText, Clock, BadgeCheck, Landmark, ShieldCheck, Loader2. ONBOARDING: BadgeCheck, Layers, Eye, Shield. SELECTOR: Smartphone, Monitor. DEMO personas: User Citizen, Shield Officer, Building2 Department, Landmark MLA, Settings Super Admin. MOBILE bottom nav: Home, Grid3X3, FileText, Sparkles, User. Mobile quick-access tiles: Car #2563EB/#EFF6FF, Wheat #059669/#ECFDF5, FileCheck #7C3AED/#F5F3FF, AlertTriangle #DC2626/#FEF2F2, Timer #D97706/#FFFBEB, Sparkles #0891B2/#ECFEFF. Unknown backend icon names fall back to FileText.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/components/ui/iconRegistry.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/navItems.ts",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopSidebar.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/services/catalog/meta.ts",
+     "/Users/chandyfolder/vetri-app/src/features/home/pages/HomeDashboard.jsx",
+     "/Users/chandyfolder/vetri-app/src/components/ui/index.jsx"
+    ],
+    "visual_potential": "An honest icon vocabulary for kinetic shots: 8 nav glyphs in crimson tiles on a grid for 'one portal, every department'. The Sparkles glyph is the visual identity of both Ask Vetri and Schemes. The emergency 2×2 (100/108/101/112, colour-coded) is a strong graphic beat."
+   },
+   {
+    "name": "Crimson hero band + seal watermark + live stats",
+    "what_it_really_does": "The DesktopHero section uses linear-gradient(135deg,#9B1B30,#6B1D2A), radius 20, padding 34px 34px 30px, and is about 1307×372px at 1920. A Seal 300px sits at right:40, vertically centred, opacity 0.1, filter grayscale(1) brightness(1.8). That filter turns the full-colour emblem into a pale rose ghost: the gopuram becomes a blank silhouette while the Tamil ring text stays legible. Copy: 'வணக்கம்,' (13.5px, Noto Sans Tamil, white 72%), then the name 34px/800/ls -0.7, then a lede at 14px white 74% max 560. The gold CTA is 'Browse All Services →' (sec bg, #3A2A05 text, r12, 11px 20px, 13.5/700). Below it are four glass stat tiles (white 12% bg, white 16% border, r14) with a 22px/800 number and an 11.5px label, icons in secLt.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopHero.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/citizen__home.png"
+    ],
+    "visual_potential": "The hero frame of the film. The Tamil greeting, the citizen's name and four real numbers (2 · 4 · 9 · 1) sit on crimson over a ghost emblem. Push in slowly toward the watermark, or rack focus from the watermark to the greeting."
+   },
+   {
+    "name": "Card and layout geometry",
+    "what_it_really_does": "desktopCss.ts: .vtn-container max-width 1760, padding-inline clamp(16px,3vw,56px), so content runs x=136→1784 at 1920. .vtn-dash grid columns are clamp(232px,19vw,312px) + 1fr with gap clamp(16px,1.6vw,28px), giving a 312px rail and a 28px gap at 1920. Grids: vtn-grid-2/3/4 use minmax 340/280/220. Quick Services uses minmax(210px,1fr), 5 columns at 1920. .vtn-card: card bg, 1px bdr, radius 14, transition .15s. Hover is the only desktop motion: border pri+59, translateY(-2px), box-shadow 0 8px 22px pri+14. RADII: hero 20 · selector cards 22 · role banners '0 0 28px 28px' · rail cards / dashboard sections / announcements 16 · panels / quick-service / scheme cards 14 · dropdown 14 · header search and icon buttons 12 · hero CTA 12 · login CTA and inputs 11 · DeskBtn 10 · status chips 20 · filter chips 9999 · POPULAR badge 6 · avatar 9 · gold rule 2. Mobile Btn variants (primary / secondary / gold / outline) use r16, sizes sm 8×16/13, md 12×24/14, lg 16×32/16. Mobile Card is r16, padding 16, shadow 0 1px 3px rgba(0,0,0,.08). SHADOWS: desktop surfaces are flat, structured by 1px #E5E7EB hairlines. Selector card 0 18px 44px rgba(30,4,10,.34), hover 0 26px 56px rgba(30,4,10,.42) with -4px lift over .18s. Dropdown 0 18px 40px rgba(0,0,0,.18). Toast 0 10px 30px rgba(0,0,0,.22). MobileShell 0 0 60px rgba(0,0,0,.1). Framed column 0 10px 34px pri+0F. TABLE: th 11/700 ls .6 uppercase txt3, 12×16 padding; td 14×16; selected row pri+12. Comments claim an 8-pt system (8/16/24/32/48), but the code also uses 11, 13, 14, 15, 17, 18, 26 and 34.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/app/desktop/desktopCss.ts",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopUI.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopQuickServices.tsx",
+     "/Users/chandyfolder/vetri-app/src/components/ui/index.jsx",
+     "/Users/chandyfolder/vetri-app/src/app/shells/DesktopShell.tsx"
+    ],
+    "visual_potential": "Rebuild cards as vector layers with the exact radii (14/16/20) and 1px #E5E7EB hairlines for crisp 4K. The -2px lift with a crimson-tinted shadow is the app's authentic 'touch' feedback for a cursor-hover beat."
+   },
+   {
+    "name": "Splash intro choreography",
+    "what_it_really_does": "SplashScreen.jsx is full-viewport and plays before both shells (App.tsx). It replays whenever the experience is switched, with a fallback div of #9B1B30 while it loads. Timeline from mount:\n- t=0: 180deg pri→acc gradient plus a gold radial haze at 50% 30% (8%). The seal starts hidden (opacity 0, scale 0.7).\n- t=400ms (p=1): Seal 100px goes to opacity 1 and scale 1 over 0.8s with cubic-bezier(0.34,1.56,0.64,1), a back-out overshoot.\n- t=1200ms (p=2): the seal starts the emblemGlow loop, a 2s ease-in-out infinite filter drop-shadow from 0 0 8px rgba(212,168,67,.3) to 0 0 20px rgba(212,168,67,.6). At the same moment 'Vetri Tamil Nadu' (28px/800, white) and 'GOVERNMENT SUPER APP' (12px, letterSpacing 3, uppercase, white 70%) rise 16px→0 while fading in over 0.6s with the default 'ease'. 'வெற்றி தமிழ்நாடு' (14px, gold #D4A843, Noto Sans Tamil) fades to 0.9 over 0.6s ease-out with a 0.3s delay (visible from about 1.5s to 2.1s).\n- t=2000ms (p=3): a loading bar fades in over 0.4s at bottom:80px. It is a 120×3px track at white 20%, r2, filled with a gold gradient (sec→secLt→sec, bg-size 200%) running shimmer for 1.5s, linear, infinite.\n- t=3200ms: onDone fires and the shell mounts. A new desktop visitor lands on /onboarding; an authenticated one goes to /home.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/auth/pages/SplashScreen.jsx",
+     "/Users/chandyfolder/vetri-app/src/styles/theme.ts",
+     "/Users/chandyfolder/vetri-app/src/App.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/01_splash_500.png",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/01_splash_1300.png"
+    ],
+    "visual_potential": "The only authored cinematic motion in the product, so it can be recreated 1:1 at film scale as the opening 3.2s. The seal pops with overshoot and breathes gold, the title rises, the Tamil name glows in gold, and the gold shimmer line can carry the cut into the portal."
+   },
+   {
+    "name": "Experience Selector",
+    "what_it_really_does": "This is the first screen on a fresh visit, deliberately theme-independent (always lightColors). Background is the 160deg gradient #9B1B30→#6B1D2A 55%→#4E1220 with a 560px centred Seal watermark at opacity 0.06 (grayscale, brightness 1.8). Content top to bottom:\n- Seal 64px.\n- 'Vetri Tamil Nadu' 30/800/-0.5.\n- 'வெற்றி தமிழ்நாடு · Government Super App' (13px, white 72%).\n- A 44×3px gold rule (C.sec, r2, margin 20px auto 0).\n- 'Choose Your Experience' 17/600 and 'Same secure services. Two ways to use them.'\n- Two cards (white 97%, r22, padding 26×24): '📱 Mobile Super App' / FOR CITIZENS and '🖥 Government Web Portal' / FOR OFFICIALS & PRESENTATIONS. Each has a gold 4px dot list and a crimson 'Continue →'.\n- Footer line: ShieldCheck in gold + 'You can switch anytime from Profile → Switch Experience'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/app/shells/ExperienceSelector.tsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/00_selector.png"
+    ],
+    "visual_potential": "The cleanest brand frame: emblem, title, Tamil line, gold rule. The gold rule drawing on under the title is the film's signature motif. The two cards can split apart to show 'one app, two presentations'."
+   },
+   {
+    "name": "Desktop login split",
+    "what_it_really_does": ".vtn-login grid columns 1.15fr | minmax(380px,0.85fr). LEFT hero: 150deg pri→acc, padding clamp(32px,4vw,64px), Seal 620px at bottom -12% / right -8%, opacity 0.08. It carries the lockup Seal 52 + 'Vetri Tamil Nadu' + 'வெற்றி தமிழ்நாடு · e-Sevai Digital Services', the headline 'One citizen identity for every government service.' (.vtn-h1 clamp(26px,2.4vw,40px)/800/-0.7, max 18ch) and the lede 'The official digital gateway of the Government of Tamil Nadu — apply, track and receive government services without visiting an office.' Four benefits sit in 36px r10 white-13% tiles with secLt icons. Footer: '© 2026 Government of Tamil Nadu · Secured by Aadhaar-linked verification'. RIGHT panel (white, max 420): pill 'SECURE CITIZEN LOGIN' (pri on pri+0F, r8), heading 'Sign in to your account', '+91' box, placeholder '98XXX XXXXX', crimson CTA 'Send OTP →' (r11, 14px 20px, 14.5/700). Step 2 heading is 'Enter the verification code' with OTP placeholder '● ● ● ● ● ●' (letterSpacing 8). Trust line: 'Your session is encrypted. Vetri never stores your Aadhaar number or OTP.'",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/auth/pages/DesktopLogin.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/desktopCss.ts",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/03_login.png"
+    ],
+    "visual_potential": "The headline is the film's thesis in the app's own words. The 620px ghost seal bleeding off the bottom-right corner is a strong graphic, and the half-crimson, half-white split makes a natural wipe."
+   },
+   {
+    "name": "TN emblem (Seal) asset and watermark treatment",
+    "what_it_really_does": "Seal is an <img> of the Government of Tamil Nadu emblem: Srivilliputhur gopuram, Ashoka lion capital, ring text 'தமிழ் நாடு அரசு', base text 'வாய்மையே வெல்லும்'. It is embedded as base64 PNGs: lg 128×128 (27.5KB), md 80×80, sm 48×48, chosen by size (>60 lg, >40 md). Used full-colour at 34 (role banners), 40 (footer, demo), 46 (header), 52 (login), 64 (selector) and 100 (splash). Used as a watermark with grayscale(1) brightness(1.8) at opacity 0.06 (selector 560px), 0.08 (login 620px), 0.1 (hero 300px; rail identity card 140px at right/bottom -26).",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/components/ui/index.jsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopHero.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopSidebar.tsx"
+    ],
+    "visual_potential": "There are two treatments: the full-colour emblem with a gold glow for identity beats, and the pale monochrome ghost at 6–10% for atmosphere. The film needs a high-resolution official emblem; the app's 128px asset visibly softens at 300–620px."
+   },
+   {
+    "name": "Bilingual Tamil layer",
+    "what_it_really_does": "translations.ts is a flat en→ta map consumed by useT() when lang==='ta'. On the DESKTOP portal only DesktopNavigation (8 tabs) and the DesktopSidebar 'Quick Links' list call t(); page bodies stay English. Tamil that always renders on desktop regardless of language: selector 'வெற்றி தமிழ்நாடு · Government Super App'; splash 'வெற்றி தமிழ்நாடு' in gold; header and login 'வெற்றி தமிழ்நாடு · e-Sevai Digital Services'; strip toggle 'தமிழ்'; hero 'வணக்கம்,'; footer 'வெற்றி தமிழ்நாடு' and 'Language / மொழி'; scheme cards' nameTamil subtitles; DesktopServiceFlow meta.nameTamil; onboarding Tamil sublines. Fonts: Noto Sans Tamil 300–800 via Google Fonts, with inline fontFamily overrides on the Tamil lines.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/lib/i18n/translations.ts",
+     "/Users/chandyfolder/vetri-app/src/hooks/useUi.ts",
+     "/Users/chandyfolder/vetri-app/src/features/schemes/pages/DesktopSchemes.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/schemes/catalog/schemes2026.ts",
+     "/Users/chandyfolder/vetri-app/src/features/services/catalog/meta.ts",
+     "/Users/chandyfolder/vetri-app/src/features/auth/pages/OnboardingScreen.jsx"
+    ],
+    "visual_potential": "Tamil-over-English lockups (Tamil in gold on crimson, as on the splash) and a nav-bar language flip (Dashboard→டாஷ்போர்டு, Grievances→குறைகள், Transparency→வெளிப்படைத்தன்மை) are both real. Scheme cards show Tamil names natively."
+   },
+   {
+    "name": "Typography",
+    "what_it_really_does": "Fonts are loaded by @import of Inter 300–900 and Noto Sans Tamil 300–800. body is 'Inter','Noto Sans Tamil',system-ui,sans-serif. IDs use generic 'monospace' (dashboard locker IDs, mobile Aadhaar field); .vtn-num applies tabular-nums. Scale:\n- Hero name 34/800/-0.7.\n- vtn-h1 clamp(26–40)/800/-0.7, line-height 1.12; PageHeader h1 clamp(22–30).\n- Selector title 30/800/-0.5; splash title 28/800.\n- Brand wordmark 19/800/-0.3.\n- Section H2 18/700; panel titles 14.5–15/700.\n- Stat numbers 22/800 in the hero; KPI numbers on scorecards are about 22–28/800 and coloured.\n- Nav 13.5 at 500/700; card titles 13.5–14/600; body 12.5–14.\n- Overlines: 11/700 ls .8 uppercase ('QUICK LINKS', 'EMERGENCY'); 10 ls 1.4 ('CITIZEN ID'); 10/700 ls 1 ('FOR CITIZENS'); splash 12 ls 3 ('GOVERNMENT SUPER APP').\n- POPULAR badge 9.5/700 ls .3 in secDk.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/styles/theme.ts",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/desktopCss.ts",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopHeader.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopHero.tsx"
+    ],
+    "visual_potential": "Film type: Inter ExtraBold with tight tracking for English, Noto Sans Tamil for Tamil, and a wide-tracked uppercase overline (ls 3) as the 'official' register. Use tabular figures for counters."
+   },
+   {
+    "name": "Onboarding (mobile-authored, shown on desktop)",
+    "what_it_really_does": "Four pages, each with a 120px r32 tile at colour+10 holding an 80px r24 tile at colour+18 and a 40px icon at stroke 1.5. Title 26/800, Tamil subline 14px (in the page colour, 80% opacity), description 15px txt2. Dots are 8px, with the active one 24px wide in pri (0.3s). The CTA is a full-width Btn lg, primary until the last page switches to gold 'Get Started'. fadeIn is 0.5s per page (translateY 12→0). Pages: BadgeCheck pri 'One Citizen Identity' / 'ஒரே குடிமகன் அடையாளம்'; Layers info 'Every Service, One Tap' / 'அனைத்து சேவைகளும்'; Eye ok 'Track Everything' / 'அனைத்தையும் கண்காணியுங்கள்'; Shield sec 'No Middlemen' / 'இடைத்தரகர்கள் இல்லை'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/auth/pages/OnboardingScreen.jsx",
+     "/Users/chandyfolder/vetri-app/motion-studio/captures/view/desktop/02_after_splash.png"
+    ],
+    "visual_potential": "The four bilingual promises work as title cards built from the app's own tile geometry. Do not use the desktop capture: the Continue button stretches the full 1920px width."
+   },
+   {
+    "name": "Role-portal banners and footer",
+    "what_it_really_does": "The Officer, Department, MLA and Admin pages use a banner with linear-gradient(135deg,#6B1D2A,#7A1526), radius '0 0 28px 28px', a 34px Seal and a role icon tile: Shield 'Tmt. R. Kalaivani · Revenue Inspector · Mylapore Taluk'; Building2 'Revenue & Disaster Management · Operational dashboard · Chennai District'; Landmark 'Mylapore Constituency · Chennai District · Assembly segment'; Settings 'Platform Administration · Vetri TN · Super Admin'. DesktopFooter has an acc #6B1D2A bg, Seal 40 + wordmark, four link columns (Citizen Services / Grievances / Transparency / About) and '© 2026 Government of Tamil Nadu. All rights reserved.' · 'Designed and maintained for the citizens of Tamil Nadu · e-Sevai'.",
+    "evidence_files": [
+     "/Users/chandyfolder/vetri-app/src/features/officer/pages/OfficerPortal.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/mla/pages/MlaPortal.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/department/pages/DepartmentDashboard.tsx",
+     "/Users/chandyfolder/vetri-app/src/features/admin/pages/AdminPortal.tsx",
+     "/Users/chandyfolder/vetri-app/src/app/desktop/DesktopFooter.tsx"
+    ],
+    "visual_potential": "Maroon banners can open the 'governance side' beats (officer → department → MLA). The footer's maroon closes a scroll naturally into the end card."
+   }
+  ],
+  "real_data": [
+   "Brand: 'Vetri Tamil Nadu' / 'வெற்றி தமிழ்நாடு' / 'Government Super App' / 'GOVERNMENT SUPER APP' (splash, uppercase ls 3) — SplashScreen.jsx, ExperienceSelector.tsx",
+   "Header strip: 'Government of Tamil Nadu · Official Citizen Services Portal' — DesktopHeader.tsx",
+   "Brand subline: 'வெற்றி தமிழ்நாடு · e-Sevai Digital Services' — DesktopHeader.tsx, DesktopLogin.tsx",
+   "Search placeholder: 'Search services, certificates, schemes…' — DesktopHeader.tsx",
+   "Selector: 'Choose Your Experience' · 'Same secure services. Two ways to use them.' · '📱 Mobile Super App' 'For citizens' · '🖥 Government Web Portal' 'For officials & presentations' · 'Multi-column dashboard' 'Executive statistics' 'Large-screen widgets' · 'You can switch anytime from Profile → Switch Experience' — ExperienceSelector.tsx",
+   "Hero: 'வணக்கம்,' · 'Chandramoulishwarar K' · 'Welcome to your Government of Tamil Nadu citizen dashboard. Apply for services, track applications and access your verified documents — all in one place.' · CTA 'Browse All Services' — DesktopHero.tsx",
+   "Hero stats (seed): 2 'Active Applications' · 4 'Documents in Locker' · 9 'Eligible Schemes' · 1 'Open Grievances' — DesktopHero.tsx, citizen__home.png",
+   "Identity rail: 'CITIZEN ID' 'TN-2024-XXXX-8842' · 'Chandramoulishwarar K' · 'Chennai · Mylapore' · 'Aadhaar + DigiLocker' · 'QR Verify' 'Profile' — DesktopSidebar.tsx, citizen__home.png",
+   "Emergency: Police 100 (#DC2626) · Ambulance 108 (#059669) · Fire 101 (#EA580C) · Emergency 112 (#2563EB) — DesktopSidebar.tsx",
+   "Nav labels EN→TA: Dashboard டாஷ்போர்டு · Services சேவைகள் · Applications விண்ணப்பங்கள் · Digital Locker டிஜிட்டல் பெட்டகம் · Grievances குறைகள் · Schemes திட்டங்கள் · Transparency வெளிப்படைத்தன்மை · Help உதவி — navItems.ts, translations.ts",
+   "Iconic Tamil (translations.ts / screens): 'ஒரே குடிமகன் அடையாளம்' = One Citizen Identity; 'அனைத்து சேவைகளும்' = All services (shown under 'Every Service, One Tap'); 'அனைத்தையும் கண்காணியுங்கள்' = Track everything; 'இடைத்தரகர்கள் இல்லை' = No middlemen; 'வெற்றி TN-க்கு வரவேற்கிறோம்' = Welcome to Vetri TN; 'தமிழ்நாடு அரசு · அதிகாரப்பூர்வ குடிமக்கள் சேவை வலைவாசல்' = Government of Tamil Nadu · Official Citizen Services Portal; 'விண்ணப்பம் சமர்ப்பிக்கப்பட்டது' = Application submitted; 'சரிபார்க்கப்பட்டது' = Verified; 'நலத்திட்டங்கள்' = Welfare Schemes; 'அரசு வெளிப்படைத்தன்மை' = Government Transparency; 'அவசர உதவி' = Emergency; 'தொடங்குங்கள்' = Get Started; 'மொழி' = Language",
+   "Seal ring text (inside emblem image): 'தமிழ் நாடு அரசு' (Government of Tamil Nadu) and 'வாய்மையே வெல்லும்' (Truth alone triumphs) — components/ui/index.jsx TN_SEAL",
+   "Login: 'One citizen identity for every government service.' · 'The official digital gateway of the Government of Tamil Nadu — apply, track and receive government services without visiting an office.' · 'Apply for 20+ services' · 'Track under Right to Service' · 'Verified digital documents' · 'Transparent governance' · 'SECURE CITIZEN LOGIN' · 'Sign in to your account' · 'Send OTP' · 'Your session is encrypted. Vetri never stores your Aadhaar number or OTP.' · '© 2026 Government of Tamil Nadu · Secured by Aadhaar-linked verification' — DesktopLogin.tsx",
+   "Quick Services (seed order): Income Certificate '7–15 working days' '₹60' POPULAR · Community Certificate '15 days' '₹60' POPULAR · Birth Certificate POPULAR 'Free within 21 days' · Driving Licence POPULAR 'LLR ₹200 · DL ₹700 (single) / ₹1,000 (dual)' · Death Certificate · Marriage Certificate · Ration Card (Smart Card) 'Free (Gov ₹0)' · Patta Transfer '₹60 (transfer) · ₹25 (extracts)' — meta.ts, citizen__home.png",
+   "Service Tamil names: வருமானச் சான்றிதழ் (Income) · சாதிச் சான்றிதழ் (Community) · பிறப்புச் சான்றிதழ் (Birth) · ஓட்டுநர் உரிமம் (Driving Licence) · ரேஷன் அட்டை (Ration) · பட்டா மாற்றம் (Patta Transfer) · வில்லங்கச் சான்றிதழ் (Encumbrance) · குடிநீர்க் கட்டணம் (Water) — meta.ts",
+   "Catalogue size: 21 services (SERVICE_META svc_income … svc_water); Services page filter 'All · 21'; Admin '21 Services' — meta.ts, citizen__services.png, admin__admin.png",
+   "Schemes (name / Tamil / benefit / budget / match / colour): Annanin Seer Scheme / அண்ணனின் சீர் திட்டம் / '8 g gold coin + silk saree' / ₹812 Crore / 92% / #DB2777; Thai Maaman Thanga Modhiram Scheme / தாய் மாமன் தங்க மோதிரம் திட்டம் / '1 g gold ring for every baby born in a Government hospital' / ₹560 Crore / 88% / #F59E0B; Vetri Laptop Scheme / வெற்றி மடிக்கணினி திட்டம் / 'Free laptop for college students' / ₹2,000 Crore / 85% / #7C3AED; Modern Bicycle Scheme / நவீன மிதிவண்டி திட்டம் / ₹777 Crore / 80% / #0891B2; PM Kisan Samman Nidhi / பிரதம மந்திரி கிசான் சம்மான் நிதி / '₹6,000 per year' / 95% / #0F766E — schemes2026.ts",
+   "Applications: 'APP-2026-IC-44821' Income Certificate In Progress, officer 'Tmt. R. Kalaivani · Revenue Inspector', '3 days remaining under the Right to Service charter.'; 'APP-2026-CC-44903' Community Certificate — citizen__tracker.png",
+   "Grievance: 'Road Damage' 'CMP-TN-000452' 'GCC - Highways' priority High, steps Submitted → Assigned → In Progress → Resolved, 'Expected resolution within 5 days of filing.' — DesktopDashboard.tsx, citizen__complaint.png",
+   "Locker docs: DL-TN-2024-8842 (Transport, Valid 12/2029) · BC-TN-2002-4421 (Civil) · IC-TN-2024-9912 (Revenue) · RC-TN-CHN-7788 (Civil Supplies) — citizen__wallet.png",
+   "District Scorecard: 1,180 'Applications this month' · 982 Approved · 128 Pending · 17 Overdue · 4.6 'average days to decision' · monthly 820/940/1,010/1,105/1,160/1,182 (Feb–Jul) — citizen__district.png",
+   "MLA (Mylapore): 4,233 submitted · 3,867 completed · 298 pending · 5.2d avg resolution · 4.3/5 satisfaction · 78% scheme uptake — mla__mla-portal.png, citizen__mla.png",
+   "Officer: 'Tmt. R. Kalaivani' 'Revenue Inspector · Mylapore Taluk' · Pending 2 · Done (month) 47 · Avg Processing 4.2d · Approval Rate 92% · Citizen Rating 4.6/5 · SLA Compliance 96% — officer__officer.png",
+   "Admin: 21 Services · 38 Districts · 5 Roles · 15 Workflow Stages · 14 Integrations · 99.9% Uptime; rows 'DigiLocker (mock)' … 'HEALTHY · MOCK' — admin__admin.png",
+   "Demo personas: 'Citizen — Chandramoulishwarar K · Mylapore' · 'Officer — Tmt. R. Kalaivani · Revenue Inspector' · 'Department — Revenue & Disaster Management' · 'MLA — Mylapore Assembly Constituency' · 'Super Admin — Platform administration'; 'Digital Governance Platform · fully offline demo' — DemoMode.tsx",
+   "Footer: 'A unified digital gateway to Government of Tamil Nadu citizen services, certificates, welfare schemes and grievance redressal.' · 'Designed and maintained for the citizens of Tamil Nadu · e-Sevai' — DesktopFooter.tsx",
+   "Masthead measured heights at 1920: strip 40px #6B1D2A · brand bar 74px #9B1B30 · gold rule 3px #D4A843 · nav 47px #FFFFFF + 1px #E5E7EB · page #F7F7FA from y=165 — raw citizen__home.png pixel sample",
+   "Keyframes (theme.ts): fadeIn translateY(12px)→0; slideDown -20px; emblemGlow drop-shadow 8px rgba(212,168,67,0.3) ↔ 20px rgba(212,168,67,0.6); shimmer background-position -200%→200%; breathe opacity .4↔1; successPop scale 0→1.2→1 (mobile only)"
+  ],
+  "strongest_moments": [
+   "Splash (SplashScreen.jsx, 01_splash_1300.png): on a crimson-to-maroon vertical gradient with an 8% gold haze, the TN emblem pops in with overshoot (cubic-bezier 0.34,1.56,0.64,1), then breathes a gold halo every 2s. 'Vetri Tamil Nadu' rises 16px, and 'வெற்றி தமிழ்நாடு' fades in gold 300ms later. A 120×3 gold shimmer line follows. This is the product's only authored motion and can be rebuilt 1:1 at film scale in 3.2s.",
+   "Experience Selector (00_selector.png): a ghost emblem at 6% opacity behind the full-colour seal, the bilingual title, and a 44×3px gold rule centred under it. Two white r22 cards with deep crimson shadows carry 'Same secure services. Two ways to use them.' It is the most composed brand frame in the app.",
+   "Masthead lockup (citizen__home.png, top 165px): maroon strip, crimson brand bar, 3px gold rule, white tab bar with the 3px crimson active underline. It works as a band-by-band wipe transition that is literally the app's chrome.",
+   "Crimson hero band (citizen__home.png): 'வணக்கம்,' over 'Chandramoulishwarar K' (34/800), with a 300px ghost emblem on the right, a gold 'Browse All Services' CTA, and four glass tiles reading 2 · 4 · 9 · 1. Real data, bilingual greeting, and the government emblem in one frame.",
+   "Login split (03_login.png): 'One citizen identity for every government service.' on crimson, with a 620px ghost seal bleeding off the corner, beside a clean white OTP panel ('SECURE CITIZEN LOGIN', '+91', 'Send OTP →'). The thesis line is in the app's own words.",
+   "Welfare Schemes grid (citizen__schemes.png): cards show the English name with the Tamil name beneath, gold 'Allocation ₹2,000 Crore' lines, coloured match bars (95/92/88/85/80%) and crimson 'View & apply' buttons. This is visible bilingual proof inside a working module."
+  ],
+  "honesty_flags": [
+   "The Seal asset is low resolution. It is a base64 PNG, at most 128×128 (lg; md 80, sm 48), upscaled in the app to 300px (hero), 560px (selector) and 620px (login), where it visibly softens. A 4K film needs the official vector emblem. Do not imply the app ships a high-resolution emblem.",
+   "The desktop portal has almost no motion. The only motion is the hover lift (.15s, -2px, crimson-tinted shadow) and the .vtn-spin loader, and reduced-motion is respected. Count-up numbers, card cascades, chart draw-ons and parallax are all film choreography, not product behaviour. Real authored motion is limited to the splash (all platforms) and fadeIn/successPop on mobile screens.",
+   "Tamil coverage on desktop is partial. Toggling தமிழ் translates only the 8 nav tabs and the rail 'Quick Links'; page headings, the hero lede, panels and buttons stay English. The Tamil string for the official strip exists in translations.ts, but DesktopHeader hardcodes the English, so 'தமிழ்நாடு அரசு · அதிகாரப்பூர்வ…' never renders. Do not show a fully Tamil portal.",
+   "Tamil that renders by default (no toggle): the brand sublines, 'வணக்கம்,', the splash name, the 'தமிழ்' toggle label, the footer 'மொழி', scheme nameTamil subtitles, service-flow nameTamil, and the onboarding sublines. DesktopAI greets 'Vanakkam Chandramoulishwarar' in Latin script, not Tamil.",
+   "The hero 'Open Grievances' value is hardcoded `v: 1` in DesktopHero.tsx and not read from a query. It matches the single seeded complaint CMP-TN-000452. The other three stats (2/4/9) come from queries.",
+   "Officer, Department, MLA and Admin pages render inside the citizen masthead. It still shows 'Chandramoulishwarar / TN-2024-XXXX-8842' and the 2-unread bell, and no nav tab is active. The role pages are mobile-authored layouts stretched into the container. Crop the masthead out of role-portal shots, or the frame contradicts itself.",
+   "Onboarding on desktop is a stretched mobile layout: a full-width 1920px 'Continue' button and a 'Skip' pinned to the corner. Use a mobile capture or rebuild the cards; do not present it as the portal's onboarding.",
+   "Capture filenames do not match real timing. 01_splash_2300.png already shows onboarding, because the capture script's sleeps plus two screenshots per step drift past 3.2s, and 01_splash_1300 is actually in phase p=3 (loading bar visible). Time the splash from code (400/1200/1500/2000/3200 ms), not from the filenames.",
+   "The 8-pt spacing system is claimed in comments, but the values used include 11, 13, 14, 15, 17, 18, 26 and 34px. Do not describe the system as strictly 8-pt.",
+   "The login says 'Apply for 20+ services'; the catalogue has 21 (SERVICE_META), and the Services page reads 'All · 21'.",
+   "Scheme names, benefits and budgets (e.g. ₹2,000 Crore laptop, ₹812 Crore Annanin Seer) carry a provenance note in schemes2026.ts: 'have not been re-verified against the published budget document'. Confirm them before showing to a Minister.",
+   "The Admin integration panel labels every row '(mock)' and 'HEALTHY · MOCK'. The demo runs fully offline on mock data ('fully offline demo'). Do not imply live state-system integrations (DigiLocker, Parivahan, TamilNilam, UIDAI).",
+   "Browser tab residue: the page <title> is 'vetri-app', the favicon is the Vite default purple bolt, and src/index.css carries Vite scaffold tokens (purple #aa3bff). Never show browser chrome or the tab. None of these are part of the identity.",
+   "Dark mode exists (pri #E8485C on slate #0F172A, and the splash would turn #E8485C→#9B1B30), but no dark captures exist; any dark shot needs a fresh capture. The Experience Selector ignores dark mode by design.",
+   "The selector card titles contain emoji ('📱', '🖥') rendered by the system emoji font. Expect platform-dependent glyphs in captures.",
+   "Party proximity: the app name 'Vetri' and scheme names like 'Vetri Laptop Scheme' share a root with a party name. Present them strictly as product and scheme names. Never pair them with party colours (#FFCC00), stripes, emblems, slogans or leader imagery."
+  ],
+  "notes": "FILM LOOK DERIVED FROM THE APP'S OWN SYSTEM\n1. Grade ladder (night scenes, title cards): #4E1220 → #6B1D2A (acc) → #7A1526 (priDk) → #9B1B30 (pri). The selector's 160deg three-stop gradient is the master background. Daylight UI scenes sit on #F7F7FA with white #FFFFFF cards and 1px #E5E7EB hairlines.\n2. Gold is used as light, never as fill. #D4A843 goes on 3px rules, small Tamil type and badges; #E8C66A on glow highlights and icons on crimson; #B8922E on foil hairlines. Its contrast on crimson is only 3.66:1, so keep gold type at 14px+ equivalent or put it on #6B1D2A (5.17:1).\n3. Signature motifs, all present in code:\n- (a) The 3px gold rule. It is 44px wide and centred under the title on the selector, and full-bleed under the brand bar. Draw it on left to right as the film's connective tissue.\n- (b) The seal watermark: grayscale(1) brightness(1.8) at 6–10% opacity, oversized and bleeding off-frame, as on login (620px at -12%/-8%).\n- (c) emblemGlow: a gold drop-shadow breathing from 8px at 0.3 to 20px at 0.6 on a 2s ease-in-out loop.\n- (d) The shimmer line: a 120×3 gold gradient sweep, usable as a progress bar or transition wipe.\n- (e) The crimson 135deg hero gradient with r20 corners.\n- (f) Tinted rounded-square icon tiles: crimson outline lucide icons at stroke 1.8 on a 5% crimson tile, r12.\n4. Motion vocabulary taken from the app: cubic-bezier(0.34,1.56,0.64,1) at 0.8s for hero reveals (scale 0.7→1); 0.6s ease with a 16px rise for titles; a 0.3s stagger before the Tamil line; 0.15s with a -2px lift for touch beats.\n5. Type: Inter 800 at -0.5 to -0.7 tracking for English headlines; Noto Sans Tamil 400–600 for Tamil; 12px uppercase at ls 3 for the official overline. Tabular figures for any numbers.\n\nSUBTLE NOD TO THE PARTY BOARD WITHOUT PARTY WORDING\n- Shared crimson and gold is the honest overlap: hue analysis below shows the two palettes share the same gold family and nearly the same crimson. Do NOT recolour UI captures to #A60000 or #FFCC00, or they will stop matching the app.\n- Gold match: the app's own secDk #B8922E (hue ~43.5°) is effectively the board's Foil Gold #B69248 (hue ~40°). Use #B8922E for foil hairlines and end-card rules; it is fully app-native.\n- Crimson match: the app's #9B1B30 (hue ~350°, raspberry-maroon) and Core Crimson #A60000 (hue 0°, hot red) are close relatives. Keep #9B1B30 everywhere, optionally warming non-UI atmosphere by a few degrees in the grade.\n- Shared font: Noto Sans Tamil appears in both systems, so use it for all Tamil. Optionally use IBM Plex Mono for reference numbers (APP-2026-IC-44821, TN-2024-XXXX-8842); the app already renders IDs in a monospace, so this stays truthful.\n- Warm Ivory #F7F3E8: use it only as an end-card or paper ground (#9B1B30 on it is 7.3:1). Do not put it under UI captures, whose true ground is #F7F7FA or #FFFFFF.\nAVOID:\n- Flag Yellow #FFCC00 anywhere.\n- Equal red|yellow|red tri-bands. The masthead stack of maroon 40px / crimson 74px / 3px gold is asymmetric and reads as app chrome, so keep it that way.\n- Radiating ray or sunburst bursts behind the emblem, which echo the flower-ray emblem. Use the app's soft radial gold haze (radial-gradient at 50% 30%, 8%) instead.\n- Cormorant Garamond or any serif display face; the app has no serif.\n- Elephants, flags and party names ('TVK', 'Kazhagam') or slogans.\n- Pairing the TN Government emblem with party-coloured elements in the same frame.\nThe emblem should appear only as the app uses it: full-colour for identity beats, ghosted for atmosphere.\n\nPRACTICAL\n- Rebuild the masthead, hero, cards and splash as vector layers using the measured geometry below for crisp 4K.\n- Use the 2× captures in /Users/chandyfolder/vetri-app/motion-studio/captures/raw/desktop (3840px wide) as plates.\n- Masthead heights at 1920: strip 40px, brand bar 74px, gold rule 3px, nav 47px; content area x=136→1784; rail 312px; gap 28px; hero about 1307×372px starting at y=193.\n- Extracted seal PNGs (lg/md/sm) are in the scratchpad at /private/tmp/claude-501/-Users-chandyfolder-vetri-app/35c0196d-d51f-4191-a478-180f2c547235/scratchpad/seal_lg.png (128px) — for reference only, too small for the film."
+ }
+]

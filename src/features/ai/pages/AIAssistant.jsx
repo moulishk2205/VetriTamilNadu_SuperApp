@@ -1,0 +1,29 @@
+import { useState, useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Mic, Send, ArrowUpRight, Sparkles, CheckCircle } from "lucide-react";
+import { StatusBar, BackBtn } from "@/components/ui";
+import { useT, useC } from "@/hooks/useUi";
+import { aiApi } from "@/features/ai/api/aiApi";
+import { useAiStore } from "@/store/aiStore";
+import { useCitizenMemory } from "@/features/ai/memory/citizenMemory";
+import { useVoice } from "@/hooks/useVoice";
+
+const GREETING = { role: "ai", text: "வணக்கம்! நான் உங்கள் அரசு AI உதவியாளர்.", en: "Hello! I'm your government AI assistant." };
+
+const AIAssistant = ({onNav,goBack}) => { const c=useC();const t=useT();
+  const stored=useAiStore(s=>s.messages);const setStored=useAiStore(s=>s.setMessages);
+  const memory=useCitizenMemory();
+  const[msgs,setMsgs]=useState(stored.length?stored:[GREETING]);
+  const[input,setInput]=useState("");const[typing,setTyping]=useState(false);const btm=useRef(null);const viaVoice=useRef(false);
+  const voice=useVoice();
+  const{data:suggData}=useQuery({queryKey:["ai","suggestions"],queryFn:aiApi.suggestions});
+  useEffect(()=>{btm.current?.scrollIntoView({behavior:"smooth"});},[msgs,typing]);
+  useEffect(()=>{setStored(msgs.slice(-30));},[msgs,setStored]);
+  const sugg=(suggData?.items??[]).map(s=>({text:s.prompt,l:s.text}));
+  const send=(x)=>{const m=x||input;if(!m)return;voice.cancelSpeech();const history=msgs.map(mm=>({role:mm.role,text:mm.text}));setMsgs(p=>[...p,{role:"user",text:m}]);setInput("");setTyping(true);aiApi.chat(m,history,memory.snapshot()).then(r=>{if(r.intent)memory.recordIntent(r.intent);setMsgs(p=>[...p,{role:"ai",text:r.text,en:r.en,plan:r.plan,acts:(r.actions??[]).map(a=>({l:a.label,s:a.screen}))}]);setTyping(false);if(viaVoice.current){voice.speak(r.en??r.text);viaVoice.current=false;}}).catch(()=>{setMsgs(p=>[...p,{role:"ai",text:"மன்னிக்கவும், மீண்டும் முயற்சிக்கவும்.",en:"Sorry, something went wrong. Please try again."}]);setTyping(false);});};
+  const onAct=(a)=>{if(a.s.startsWith("service/"))memory.recordService(a.s.replace("service/",""));onNav(a.s);};
+  const onMic=()=>{if(input){send();return;}if(!voice.supported)return;if(voice.listening){voice.stop();return;}voice.listen(txt=>{viaVoice.current=true;setInput(txt);});};
+  return(<div style={{height:"100vh",display:"flex",flexDirection:"column"}}><StatusBar/><div style={{padding:"8px 20px",borderBottom:`1px solid ${c.bdr}`}}><div style={{display:"flex",alignItems:"center",gap:12}}><BackBtn onBack={goBack}/><div style={{width:36,height:36,borderRadius:10,background:c.pri,display:"flex",alignItems:"center",justifyContent:"center"}}><Sparkles size={18} color="#fff"/></div><div style={{flex:1}}><p style={{fontSize:15,fontWeight:700,color:c.txt}}>Vetri AI</p><p style={{fontSize:11,color:c.ok}}>{voice.listening?"Listening…":"Online"}</p></div></div></div><div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>{msgs.map((m,i)=><div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}><div style={{maxWidth:"80%",padding:"12px 16px",borderRadius:m.role==="user"?"18px 18px 4px 18px":"18px 18px 18px 4px",background:m.role==="user"?c.pri:c.bgAlt,color:m.role==="user"?"#fff":c.txt}}>{(m.plan??[]).length>0&&<div style={{marginBottom:8,paddingBottom:8,borderBottom:`1px solid ${c.bdr}`}}>{m.plan.map((s,pi)=><p key={pi} style={{fontSize:10,color:c.txt3,display:"flex",alignItems:"center",gap:4,marginBottom:2}}><CheckCircle size={9} color={c.ok}/>{s}</p>)}</div>}<p style={{fontSize:14,lineHeight:1.5,fontFamily:"'Noto Sans Tamil','Inter',sans-serif"}}>{m.text}</p>{m.en&&<p style={{fontSize:11,opacity:0.7,marginTop:6,fontStyle:"italic"}}>{m.en}</p>}{(m.acts??[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>{m.acts.map((a,ai2)=><button key={ai2} onClick={()=>onAct(a)} style={{padding:"6px 14px",borderRadius:8,background:`${c.pri}15`,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:c.pri,display:"flex",alignItems:"center",gap:4}}>{a.l}<ArrowUpRight size={12}/></button>)}</div>}</div></div>)}{typing&&<div style={{display:"flex",gap:4,padding:"12px 16px",background:c.bgAlt,borderRadius:18,width:"fit-content"}}>{[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:c.txt3,animation:"breathe 1s ease-in-out infinite",animationDelay:`${i*0.2}s`}}/>)}</div>}<div ref={btm}/></div>{msgs.length<=1&&sugg.length>0&&<div style={{padding:"0 20px 8px"}}><p style={{fontSize:10,fontWeight:700,color:c.txt3,letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Ask Vetri noticed</p><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{sugg.map((s,i)=><button key={i} onClick={()=>send(s.text)} style={{padding:"8px 14px",borderRadius:12,border:`1px solid ${c.pri}20`,background:`${c.pri}06`,cursor:"pointer",fontSize:11.5,color:c.pri,fontWeight:500,fontFamily:"inherit",textAlign:"left",lineHeight:1.4}}>{s.l}</button>)}</div></div>}<div style={{padding:"12px 20px 28px",borderTop:`1px solid ${c.bdr}`,display:"flex",gap:8}}><div style={{flex:1,display:"flex",padding:"10px 14px",background:c.bgAlt,borderRadius:20}}><input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={t("Type in Tamil or English...")||"Type in Tamil or English..."} style={{border:"none",background:"transparent",flex:1,fontSize:14,fontFamily:"'Noto Sans Tamil','Inter',sans-serif",outline:"none",color:c.txt}}/></div><button onClick={onMic} style={{width:44,height:44,borderRadius:14,background:voice.listening?c.err:c.pri,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{input?<Send size={18} color="#fff"/>:<Mic size={18} color="#fff"/>}</button></div></div>);
+};
+
+export default AIAssistant;

@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vetri-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vetri
+      POSTGRES_PASSWORD: vetri
+      POSTGRES_DB: vetri
+    ports:
+      - '5432:5432'
+    volumes:
+      - vetri-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U vetri -d vetri']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: vetri-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: .
+    container_name: vetri-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: '4000'
+      API_PREFIX: api
+      DATABASE_URL: postgresql://vetri:vetri@postgres:5432/vetri?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      JWT_ACCESS_SECRET: change-me-access
+      JWT_REFRESH_SECRET: change-me-refresh
+      JWT_ACCESS_TTL: '900'
+      JWT_REFRESH_TTL: '1209600'
+      CORS_ORIGIN: http://localhost:5173
+      GATEWAY_MODE: mock
+    ports:
+      - '4000:4000'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:4000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: vetri-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@vetri.tn
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - '5050:80'
+    depends_on:
+      - postgres
+
+volumes:
+  vetri-pgdata:

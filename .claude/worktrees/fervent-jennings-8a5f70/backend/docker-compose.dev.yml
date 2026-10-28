@@ -1,0 +1,12 @@
+# Local development override. Publishes Postgres and Redis on the loopback
+# interface only, so `npm run start:dev` on the host can reach them. Never use
+# this on a shared or internet-facing machine.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up postgres redis
+services:
+  postgres:
+    ports:
+      - '127.0.0.1:5432:5432'
+
+  redis:
+    ports:
+      - '127.0.0.1:6379:6379'

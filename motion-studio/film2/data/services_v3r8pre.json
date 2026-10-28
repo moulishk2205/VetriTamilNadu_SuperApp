@@ -1,0 +1,233 @@
+[
+ {
+  "id": "svc_income",
+  "name": "Income Certificate",
+  "ta": "வருமானச் சான்றிதழ்",
+  "dept": "Revenue & Disaster Management Department",
+  "cat": "cert",
+  "icon": "IndianRupee",
+  "mode": "digital",
+  "fee": "₹60",
+  "time": "7–15 working days"
+ },
+ {
+  "id": "svc_community",
+  "name": "Community Certificate",
+  "ta": "சாதிச் சான்றிதழ்",
+  "dept": "Revenue Department",
+  "cat": "cert",
+  "icon": "Users",
+  "mode": "digital",
+  "fee": "₹60",
+  "time": "15 days (BC/MBC) · up to 30 days (SC/ST)"
+ },
+ {
+  "id": "svc_birth",
+  "name": "Birth Certificate",
+  "ta": "பிறப்புச் சான்றிதழ்",
+  "dept": "Directorate of Public Health & Preventive Medicine (DPHPM)",
+  "cat": "cert",
+  "icon": "FileCheck",
+  "mode": "digital",
+  "fee": "Free within 21 days",
+  "time": "≤ 21 days: automatic · delayed: per authorisation"
+ },
+ {
+  "id": "svc_death",
+  "name": "Death Certificate",
+  "ta": "இறப்புச் சான்றிதழ்",
+  "dept": "Local Body Registrar (Municipality / Town Panchayat / GCC)",
+  "cat": "cert",
+  "icon": "FileCheck",
+  "mode": "digital",
+  "fee": "Free within 21 days",
+  "time": "≤ 21 days: automatic · delayed: per authorisation"
+ },
+ {
+  "id": "svc_marriage",
+  "name": "Marriage Certificate",
+  "ta": "திருமணச் சான்றிதழ்",
+  "dept": "Registration Department (IGR)",
+  "cat": "cert",
+  "icon": "Users",
+  "mode": "digital",
+  "fee": "₹100 (HMA) / ₹150 (SMA) + ₹100 appointment",
+  "time": "HMA: same-day post-verification · SMA: 30-day notice period"
+ },
+ {
+  "id": "svc_dl",
+  "name": "Driving Licence",
+  "ta": "ஓட்டுநர் உரிமம்",
+  "dept": "Ministry of Road Transport & Highways (MoRTH)",
+  "cat": "trans",
+  "icon": "Car",
+  "mode": "assisted",
+  "fee": "LLR ₹200 · DL ₹700 (single) / ₹1,000 (dual)",
+  "time": "LLR: same day · DL: after 30-day hold + driving test"
+ },
+ {
+  "id": "svc_ration",
+  "name": "Ration Card (Smart Card)",
+  "ta": "ரேஷன் அட்டை",
+  "dept": "Civil Supplies & Consumer Protection Department",
+  "cat": "wel",
+  "icon": "Users",
+  "mode": "assisted",
+  "fee": "Free (Gov ₹0)",
+  "time": "New card: up to 60 days"
+ },
+ {
+  "id": "svc_patta",
+  "name": "Patta Transfer",
+  "ta": "பட்டா மாற்றம்",
+  "dept": "Revenue Department",
+  "cat": "rev",
+  "icon": "Scale",
+  "mode": "assisted",
+  "fee": "₹60 (transfer) · ₹25 (extracts)",
+  "time": "Full/Joint: 15 days · Subdivision: 30 days"
+ },
+ {
+  "id": "svc_residence",
+  "name": "Residence Certificate",
+  "ta": "வசிப்பிடச் சான்றிதழ்",
+  "dept": "Revenue & Disaster Management Department",
+  "cat": "cert",
+  "icon": "Home",
+  "mode": "digital",
+  "fee": "₹60",
+  "time": "7–15 days"
+ },
+ {
+  "id": "svc_nativity",
+  "name": "Nativity Certificate",
+  "ta": "பூர்வீகச் சான்றிதழ்",
+  "dept": "Revenue & Disaster Management Department",
+  "cat": "cert",
+  "icon": "MapPin",
+  "mode": "digital",
+  "fee": "₹60",
+  "time": "7–15 days"
+ },
+ {
+  "id": "svc_legalheir",
+  "name": "Legal Heir Certificate",
+  "ta": "வாரிசுச் சான்றிதழ்",
+  "dept": "Revenue & Disaster Management Department",
+  "cat": "cert",
+  "icon": "Users",
+  "mode": "digital",
+  "fee": "₹60",
+  "time": "15–30 days"
+ },
+ {
+  "id": "svc_ec",
+  "name": "Encumbrance Certificate",
+  "ta": "வில்லங்கச் சான்றிதழ்",
+  "dept": "Registration Department (IGR)",
+  "cat": "rev",
+  "icon": "ScrollText",
+  "mode": "digital",
+  "fee": "₹116 + ₹5/yr",
+  "time": "2–5 working days"
+ },
+ {
+  "id": "svc_chitta",
+  "name": "Chitta / Patta Extract",
+  "ta": "சிட்டா / பட்டா சாறு",
+  "dept": "Revenue Department",
+  "cat": "rev",
+  "icon": "Scale",
+  "mode": "digital",
+  "fee": "Free",
+  "time": "Instant"
+ },
+ {
+  "id": "svc_adangal",
+  "name": "Adangal Extract (A-Register)",
+  "ta": "அடங்கல் சாறு",
+  "dept": "Revenue Department",
+  "cat": "rev",
+  "icon": "Wheat",
+  "mode": "digital",
+  "fee": "Free",
+  "time": "Instant"
+ },
+ {
+  "id": "svc_fmb",
+  "name": "FMB Sketch",
+  "ta": "அளவைப் படம் (FMB)",
+  "dept": "Survey & Settlement",
+  "cat": "rev",
+  "icon": "Map",
+  "mode": "digital",
+  "fee": "Free",
+  "time": "Instant"
+ },
+ {
+  "id": "svc_rctransfer",
+  "name": "RC Transfer",
+  "ta": "ஆர்.சி. பரிமாற்றம்",
+  "dept": "Transport Department (MoRTH)",
+  "cat": "trans",
+  "icon": "Car",
+  "mode": "assisted",
+  "fee": "₹50 + smart-card/postal",
+  "time": "15–30 days"
+ },
+ {
+  "id": "svc_duprc",
+  "name": "Duplicate RC",
+  "ta": "நகல் ஆர்.சி.",
+  "dept": "Transport Department (MoRTH)",
+  "cat": "trans",
+  "icon": "Car",
+  "mode": "assisted",
+  "fee": "₹150–₹300",
+  "time": "15–30 days"
+ },
+ {
+  "id": "svc_mvtax",
+  "name": "Vehicle Tax Payment",
+  "ta": "வாகன வரி",
+  "dept": "Transport Department (MoRTH)",
+  "cat": "trans",
+  "icon": "Receipt",
+  "mode": "assisted",
+  "fee": "Calculated dynamically",
+  "time": "Instant"
+ },
+ {
+  "id": "svc_echallan",
+  "name": "e-Challan Payment",
+  "ta": "இ-சலான்",
+  "dept": "Traffic Police / Transport (MoRTH)",
+  "cat": "trans",
+  "icon": "AlertTriangle",
+  "mode": "assisted",
+  "fee": "As per violation",
+  "time": "Instant"
+ },
+ {
+  "id": "svc_proptax",
+  "name": "Property Tax Payment",
+  "ta": "சொத்து வரி",
+  "dept": "Urban Local Bodies (GCC / Municipality)",
+  "cat": "civic",
+  "icon": "Building2",
+  "mode": "assisted",
+  "fee": "Calculated dynamically",
+  "time": "Instant"
+ },
+ {
+  "id": "svc_water",
+  "name": "Water Charges",
+  "ta": "குடிநீர்க் கட்டணம்",
+  "dept": "CMWSSB / Local Water Boards",
+  "cat": "civic",
+  "icon": "Droplet",
+  "mode": "assisted",
+  "fee": "Fixed tax + volumetric charge",
+  "time": "Instant"
+ }
+]

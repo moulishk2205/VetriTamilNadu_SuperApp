@@ -1,0 +1,29 @@
+export const meta = {
+  name: 'vetri-definitive-review',
+  description: 'Four critics score the definitive cut (12 criteria, 12 scenes, the client QC questions) with concrete fixes',
+  phases: [{ title: 'Review', detail: '4 critics, different lenses' }],
+}
+const MS = '/Users/chandyfolder/vetri-app/motion-studio'
+const R = args.round, P = args.prefix
+const sheets = Array.from({ length: 13 }, (_, k) => `${MS}/out/review/${P}_${String(k).padStart(2, '0')}.jpg`).join('\n')
+const prev = args.prev ? `\n\nWhat changed since the previous round (judge THIS draft on its own merits; say explicitly whether earlier problems are fixed): ${args.prev}` : ''
+const base = `You are reviewing round ${R} of the DEFINITIVE cut (~96.5 s) of a motion-design film for the Vetri Tamil Nadu super app, to be shown in a presentation hall. Read: ${MS}/brief/FILM_PLAN_V3.md (the client's revision directive, exact order, honesty constraints and the client's QC questions — this is your primary brief), ${MS}/brief/FILM_PLAN_V2.md (the 0–40 s part, unchanged), ${MS}/brief/BRIEF.md (product ground truth), ${MS}/film2/timeline.js (exact timings + COPY). The client supplied the portrait reference images at ${MS}/assets/portrait_red.png and ${MS}/assets/portrait_gold.png — look at them; the film must resolve to that reference exactly. LOOK at every contact sheet with the Read tool (tile label = timestamp; one frame per 0.5 s; frames are downscaled to 960x540 — judge legibility relative to a 1920x1080 frame on a hall screen):\n${sheets}\nAlso: ${MS}/out/review/wave2.png and ${MS}/out/review/spectrum2.png (the score, 0–96.5 s left→right), ${MS}/film2/cues.json (every sound cue), ${MS}/out/sync2.json. Integrated loudness −14 LUFS, true peak −1 dBFS. RENDER NOTE: review drafts are rendered WITHOUT motion blur; the delivery master is 3840×2160 with an 8-sample 180° shutter — do not score ghosting or missing blur.\n\nScore 1–10: comprehension, breathing_room, continuity, ui_legibility, transition_quality, pacing, audio, redundancy, emotional_arc, ending, opening_preserved, honesty.\nScore EACH SCENE 1–10: opening (0–10), plan (10–14.6), catalogue (14.6–19.85), driving_licence (19.85–26.25), ration_card (26.25–30.75), birth_certificate (30.75–40), schemes_gold_ring (40–49.6), complaint (49.6–56.1), mylapore (56.1–61.35), scale_virugambakkam_to_234 (61.35–73.5), portrait (73.5–83.4), maatram_identity (83.4–96.5).\nAnswer each of the client's QC questions (in FILM_PLAN_V3.md) with yes/partly/no and one line why.\nThe target is 9+ everywhere: 9 = a top studio would ship this beat as is; 7 = competent with a visible flaw. For every score below 9 there must be at least one fix. List the 8 most important concrete fixes (timestamp range, what is wrong, exactly what to change with numbers, which scores it raises). Prefer cheap, high-impact fixes.${prev}`
+const KEYS = ['comprehension', 'breathing_room', 'continuity', 'ui_legibility', 'transition_quality', 'pacing', 'audio', 'redundancy', 'emotional_arc', 'ending', 'opening_preserved', 'honesty']
+const SCENES = ['opening', 'plan', 'catalogue', 'driving_licence', 'ration_card', 'birth_certificate', 'schemes_gold_ring', 'complaint', 'mylapore', 'scale_virugambakkam_to_234', 'portrait', 'maatram_identity']
+const num = { type: 'number' }
+const SCHEMA = { type: 'object', properties: {
+  scores: { type: 'object', properties: Object.fromEntries(KEYS.map(k => [k, num])), required: KEYS },
+  scenes: { type: 'object', properties: Object.fromEntries(SCENES.map(k => [k, num])), required: SCENES },
+  qc: { type: 'array', items: { type: 'object', properties: { q: { type: 'string' }, answer: { type: 'string' }, why: { type: 'string' } }, required: ['q', 'answer', 'why'] } },
+  fixes: { type: 'array', items: { type: 'object', properties: { t: { type: 'string' }, problem: { type: 'string' }, change: { type: 'string' }, raises: { type: 'string' }, impact: { type: 'string' } }, required: ['t', 'problem', 'change', 'raises', 'impact'] } },
+  strengths: { type: 'array', items: { type: 'string' } },
+}, required: ['scores', 'scenes', 'qc', 'fixes', 'strengths'] }
+const LENSES = [
+  ['comprehension', 'LENS: a senior official in the hall who has never seen the product. Is each journey understandable? Is the move from one constituency to all 234 understandable? Does anything confuse, overclaim, or go by too fast?'],
+  ['motion', 'LENS: an award-winning motion-design director. Continuity, transitions (meaningful vs decorative), pacing contrast and holds, camera language, composition, the craft of the statewide reveal and the portrait formation, and whether the new runtime earns its length.'],
+  ['legibility-sound', 'LENS: the technical producer for the big screen: legibility at hall distance (key line ≥ ~28 px at 1080p), text discipline, frame cleanliness, and the sound arc (cues.json + waveform + spectrum): localized Mylapore → directional line → Virugambakkam confirmation → building rhythm → widening statewide stage → tension under the portrait → authoritative (not trailer) reveal → room for மாற்றம் → one clean identity resolution.'],
+  ['client', 'LENS: the client who wrote the revision directive. Judge compliance with the exact conceptual order, the Ration Card clarity, the gold ring hero moment, Virugambakkam landing, scale without clutter, the red/gold transformation growing from the network, the portrait matching the supplied reference, மாற்றம் breathing, the identity feeling earned, and preservation of the existing film. Be the hardest grader.'],
+]
+phase('Review')
+const out = await parallel(LENSES.map(([k, l]) => () => agent(`${base}\n\n${l}`, { label: 'critic:' + k, phase: 'Review', schema: SCHEMA, effort: 'high' })))
+return out.map((o, i) => o && ({ lens: LENSES[i][0], ...o }))

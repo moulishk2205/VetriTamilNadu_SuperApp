@@ -1,0 +1,6 @@
+import { StatusBar, BottomNav, Card, Header } from "@/components/ui";
+import { useC } from "@/hooks/useUi";
+
+const DistrictScorecard=({onNav,goBack})=>{const c=useC();return(<div style={{minHeight:"100vh",paddingBottom:90}}><StatusBar/><div style={{padding:"8px 20px"}}><Header title="District Scorecard" onBack={goBack}/><Card style={{marginBottom:16}}><p style={{fontSize:12.5,color:c.txt2}}>Chennai District</p><p style={{fontSize:34,fontWeight:800,letterSpacing:"-0.02em",color:c.pri,marginTop:2}}>87<span style={{fontSize:14,fontWeight:500,color:c.txt2}}>/100</span></p></Card>{[{l:"Complaints",v:"89%",p:89,cl:"#059669"},{l:"Avg Time",v:"4.2d",p:70,cl:"#2563EB"},{l:"Satisfaction",v:"4.1/5",p:82,cl:"#7C3AED"},{l:"Delivery",v:"92%",p:92,cl:"#D97706"}].map((m,i)=><Card key={i} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><p style={{fontSize:13,fontWeight:600,color:c.txt}}>{m.l}</p><p style={{fontSize:13,fontWeight:700,color:m.cl}}>{m.v}</p></div><div style={{height:6,background:c.bdr,borderRadius:3}}><div style={{height:"100%",background:m.cl,borderRadius:3,width:`${m.p}%`}}/></div></Card>)}</div><BottomNav active="services" onNav={onNav}/></div>);};
+
+export default DistrictScorecard;

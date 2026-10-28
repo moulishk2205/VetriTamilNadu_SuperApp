@@ -3,14 +3,22 @@ import { ConfigService } from '@nestjs/config'
 import { NestFactory } from '@nestjs/core'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
-import type { NextFunction, Request, Response } from 'express'
+import { json, urlencoded, type NextFunction, type Request, type Response } from 'express'
 import { Logger } from 'nestjs-pino'
 import helmet from 'helmet'
 import { AppModule } from './app.module'
 import type { AppConfig } from './config/configuration'
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true })
+  // Bodies are parsed here, not by Nest, so a malformed body gets a generic 400:
+  // Nest would otherwise echo the JSON parser's message back to the client.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, bodyParser: false })
+  app.use(json({ limit: '100kb' }), urlencoded({ extended: true, limit: '100kb' }))
+  app.use((err: { status?: number; type?: string }, req: Request, res: Response, next: NextFunction) => {
+    if (!err?.type?.startsWith('entity.') && !(err instanceof SyntaxError)) return next(err)
+    const status = err.status && err.status >= 400 && err.status < 500 ? err.status : 400
+    res.status(status).json({ statusCode: status, message: 'Malformed request body', path: req.path, timestamp: new Date().toISOString() })
+  })
   app.useLogger(app.get(Logger))
 
   const config = app.get(ConfigService)

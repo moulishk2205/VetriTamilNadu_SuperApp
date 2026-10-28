@@ -36,6 +36,11 @@ export class OfficerService {
       where: this.apps.officerScope(officer), orderBy: { createdAt: 'desc' },
       include: { officer: true, department: true, remarks: true },
     })
+    // Work first: open cases by nearest (or most overdue) deadline, then decided ones.
+    const open = (s: ApplicationStage) => s !== ApplicationStage.completed && s !== ApplicationStage.rejected
+    rows.sort((a, b) =>
+      Number(open(b.stage)) - Number(open(a.stage))
+      || (open(a.stage) ? (a.slaDeadline?.getTime() ?? Infinity) - (b.slaDeadline?.getTime() ?? Infinity) : b.updatedAt.getTime() - a.updatedAt.getTime()))
     const items = rows.map((a) => this.apps.toDto(a, a.officer, a.department?.name))
     return { officer: this.officerDto(officer), items, total: items.length }
   }

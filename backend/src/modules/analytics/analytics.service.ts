@@ -118,7 +118,7 @@ export class AnalyticsService {
     return {
       constituency: 'Mylapore',
       district: DISTRICT,
-      mla: `Hon. MLA, Mylapore · live figures for ${DISTRICT} district`,
+      mla: 'Hon. MLA, Mylapore · live figures',
       stats: {
         submitted: t.total, completed: t.completed, pending: t.pending,
         avgResolutionDays: Math.round((t.avg_days ?? 0) * 10) / 10,

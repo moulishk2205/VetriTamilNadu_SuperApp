@@ -301,12 +301,12 @@ async function main() {
     const stage = i % 10 < 6 ? ApplicationStage.completed : i % 10 === 6 ? ApplicationStage.rejected
       : pick(STAGES.filter((s) => s !== ApplicationStage.completed && s !== ApplicationStage.rejected), i * 7)
     const cid = pick(citizenIds, i + 1)
-    // Decided cases span two months; open ones sit mostly inside their charter
+    // Decided cases span five months; open ones sit mostly inside their charter
     // window, so roughly one in ten is past its deadline.
     const open = stage !== ApplicationStage.completed && stage !== ApplicationStage.rejected
     // (+0.5 day keeps every deadline half a day clear of "now", so none expires
     // seconds after seeding and lands unflagged.)
-    const createdAt = daysAgo(open ? rand(Math.ceil(charter(svc.slug) * 1.1)) + 0.5 : rand(60))
+    const createdAt = daysAgo(open ? rand(Math.ceil(charter(svc.slug) * 1.1)) + 0.5 : rand(150))
     await prisma.application.create({
       data: {
         referenceNo: `APP-2026-${svc.code.split('-')[1]}-${appSeq++}`, serviceSlug: svc.slug, serviceName: svc.name,
@@ -315,7 +315,8 @@ async function main() {
         ...(() => {
           const dept = departments.find((d) => d.name === svc.dept) ?? pick(departments, i)
           const staff = officers.filter((o) => o.departmentId === dept.id)
-          return { departmentId: dept.id, officerId: (staff.length ? pick(staff, i) : pick(officers, i)).id }
+          // Index by the service round, not i, so each officer gets a mix of services.
+          return { departmentId: dept.id, officerId: (staff.length ? pick(staff, Math.floor(i / SERVICES.length)) : pick(officers, i)).id }
         })(),
         certIssued: ['walletDelivery', 'notified', 'completed'].includes(stage), createdAt, ...timing(svc.slug, stage, createdAt, i),
       },

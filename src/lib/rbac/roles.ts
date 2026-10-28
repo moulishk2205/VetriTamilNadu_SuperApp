@@ -17,7 +17,7 @@ export type Permission =
   | 'admin:manage'
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  citizen: ['citizen:read', 'citizen:write', 'application:create', 'application:read', 'complaint:create', 'complaint:read', 'document:read'],
+  citizen: ['citizen:read', 'citizen:write', 'application:create', 'application:read', 'complaint:create', 'complaint:read', 'document:read', 'analytics:read'],
   officer: ['application:read', 'application:process', 'complaint:read', 'complaint:resolve', 'document:issue'],
   department: ['application:read', 'application:process', 'analytics:read'],
   mla: ['analytics:read'],

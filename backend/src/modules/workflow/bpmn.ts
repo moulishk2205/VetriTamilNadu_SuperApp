@@ -78,7 +78,8 @@ export function buildProcessModel(): ProcessModel {
     if (TRANSITIONS[s].length > 1) {
       const g = gateway(s, x, MAIN_Y)
       link(t, g)
-      x += GW + GAP
+      // Wider gap after a decision, so its outcome label fits on the flow.
+      x += GW + GAP * 2
       prev = g
     }
   }

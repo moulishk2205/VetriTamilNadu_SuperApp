@@ -96,7 +96,8 @@ export function ProcessMap() {
               return (
                 <g key={n.id}>
                   <circle cx={cx} cy={cy} r={n.w / 2} fill={c.card} stroke={col} strokeWidth={n.kind === 'end' ? 4 : 2} />
-                  <text x={cx} y={n.y + n.h + 14} fontSize={11} fill={c.txt2} textAnchor="middle">{n.label}</text>
+                  {/* Rejected ends sit above their decision, so their label goes on top. */}
+                  <text x={cx} y={n.terminal === 'rejected' ? n.y - 7 : n.y + n.h + 14} fontSize={11} fill={c.txt2} textAnchor="middle">{n.label}</text>
                 </g>
               )
             }

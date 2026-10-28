@@ -17,6 +17,9 @@ export const ComplaintSchema = z.object({
   departmentId: z.string().nullish(),
   department: z.string().nullish(),
   etaDays: z.number().int().nullish(),
+  /** What the officer did; shown to the citizen once resolved. */
+  resolutionNote: z.string().nullish(),
+  resolvedAt: z.string().nullish(),
   // The API returns explicit nulls for unset coordinates, so accept null as
   // well as undefined — `.optional()` alone rejects null and fails the parse.
   location: z

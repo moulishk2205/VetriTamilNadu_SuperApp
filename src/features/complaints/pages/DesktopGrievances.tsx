@@ -119,6 +119,11 @@ export default function DesktopGrievances() {
                   <div style={{ minWidth: 0 }}>
                     <p style={{ fontSize: 16, fontWeight: 700, color: c.txt }}>{sel.category}</p>
                     <p style={{ fontSize: 12.5, color: c.txt2, marginTop: 4, lineHeight: 1.55 }}>{sel.description}</p>
+                    {sel.resolutionNote && (
+                      <p style={{ fontSize: 12.5, color: c.ok, marginTop: 8, lineHeight: 1.55 }}>
+                        <b>What the officer did:</b> {sel.resolutionNote}{sel.resolvedAt ? ` (${new Date(sel.resolvedAt).toLocaleDateString('en-IN')})` : ''}
+                      </p>
+                    )}
                   </div>
                 </div>
 

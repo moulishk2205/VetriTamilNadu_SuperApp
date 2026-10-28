@@ -4,6 +4,7 @@ import { StatusBar, Card, Seal } from '@/components/ui'
 import { useC } from '@/hooks/useUi'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { useOfficerQueue, useOfficerStats } from '../hooks/useOfficer'
+import { OfficerGrievances } from '../components/OfficerGrievances'
 
 /**
  * Officer Portal — the operating workspace for a government officer. Scoped to
@@ -87,6 +88,8 @@ export default function OfficerPortal() {
             </Card>
           )
         })}
+
+        <OfficerGrievances />
 
         <p style={{ fontSize: 12, fontWeight: 700, color: c.txt3, letterSpacing: 0.5, textTransform: 'uppercase', margin: '18px 0 10px' }}>Daily Performance</p>
         <Card style={{ padding: 0 }}>

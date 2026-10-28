@@ -349,6 +349,8 @@ model Application {
   /// Maker-checker: the officer who recommended the case into approval. That
   /// officer cannot also approve it.
   makerOfficerId String?
+  /// When the "decision due soon" reminder went out (once per application).
+  slaRemindedAt  DateTime?
   fields         Json             @default("{}")
   documents      Json             @default("[]")
   timeline       TimelineEvent[]
@@ -437,6 +439,9 @@ model Complaint {
   status       ComplaintStatus @default(submitted)
   department   String?
   etaDays      Int?
+  /// What the officer did, shown to the citizen when the grievance is resolved.
+  resolutionNote String?
+  resolvedAt   DateTime?
   ward         String?
   area         String?
   lat          Float?

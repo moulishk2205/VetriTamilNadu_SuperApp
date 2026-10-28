@@ -18,6 +18,7 @@ const TrustSchema = z.object({
 const SweepSchema = z.object({
   checkedAt: z.string(),
   breached: z.array(z.object({ referenceNo: z.string(), serviceName: z.string(), daysOverdue: z.number(), escalated: z.boolean() })),
+  reminded: z.number().default(0),
 })
 
 /**
@@ -105,6 +106,7 @@ export function TrustCenter() {
                 <b className="vtn-num">{b.referenceNo}</b> · {b.serviceName}: {b.daysOverdue} day(s) overdue → {b.escalated ? 'escalated to senior officer' : 'department alerted'}, citizen notified
               </p>
             ))}
+            {sweep.data.reminded > 0 && <p style={{ fontSize: 12.5, color: c.txt2, marginTop: 6 }}>{sweep.data.reminded} citizen(s) reminded that a decision is due within two days.</p>}
           </div>
         )}
       </Card>

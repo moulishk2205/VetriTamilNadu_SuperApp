@@ -9,6 +9,8 @@ const OPEN = { notIn: [ApplicationStage.completed, ApplicationStage.rejected] }
 export interface SweepResult {
   checkedAt: string
   breached: { referenceNo: string; serviceName: string; daysOverdue: number; escalated: boolean }[]
+  /** Citizens told their decision is due within two days. */
+  reminded: number
 }
 
 /**
@@ -67,6 +69,26 @@ export class SlaService implements OnModuleInit, OnModuleDestroy {
       breached.push({ referenceNo: app.referenceNo, serviceName: app.serviceName, daysOverdue, escalated })
     }
     if (breached.length) this.log.warn(`SLA sweep: ${breached.length} application(s) breached their deadline`)
-    return { checkedAt: now.toISOString(), breached }
+
+    // Reminders: one notice per application when its deadline is two days away.
+    const soon = await this.prisma.application.findMany({
+      where: { deletedAt: null, slaRemindedAt: null, slaBreachedAt: null, stage: OPEN, slaDeadline: { gte: now, lte: new Date(now.getTime() + 2 * 86_400_000) } },
+      take: 200,
+    })
+    let reminded = 0
+    for (const app of soon) {
+      const { count } = await this.prisma.application.updateMany({ where: { id: app.id, slaRemindedAt: null }, data: { slaRemindedAt: now } })
+      if (!count) continue
+      const days = Math.max(1, Math.ceil(((app.slaDeadline as Date).getTime() - now.getTime()) / 86_400_000))
+      await this.prisma.notification.create({
+        data: {
+          citizenId: app.citizenId, category: 'reminder', priority: 'MEDIUM', icon: 'Clock', color: 'info', actionPath: '/tracker',
+          title: 'Decision due soon',
+          body: `${app.serviceName} ${app.referenceNo}: the department must decide within ${days} day(s) under the Right to Services charter.`,
+        },
+      })
+      reminded += 1
+    }
+    return { checkedAt: now.toISOString(), breached, reminded }
   }
 }

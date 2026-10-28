@@ -6,3 +6,4 @@ storage
 coverage
 .DS_Store
 *.tsbuildinfo
+backups/

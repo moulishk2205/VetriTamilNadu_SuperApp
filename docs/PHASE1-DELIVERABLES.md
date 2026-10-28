@@ -1,6 +1,6 @@
 # Vetri TN — Phase 1 Deliverables
 
-Phase 1 converted the single-file prototype into a modular, production-grade
+Phase 1 converted the single-file prototype into a modular, prototype-stage
 frontend architecture for a **Digital Governance Platform** — with the UI kept
 pixel-identical throughout. 100 source files (77 TS/TSX, 23 migrated JSX
 screens), an MSW mock backend across 8 domains, and clean extension points for

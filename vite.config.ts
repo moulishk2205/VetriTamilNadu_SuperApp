@@ -15,8 +15,8 @@ function apiOrigin(env: Record<string, string>): string | null {
 
 /**
  * Content-Security-Policy for production builds, as a <meta> tag so it ships
- * with the static bundle. Scripts load only from this origin; the only other
- * origins are the backend and Google Fonts. Inline styles stay allowed because
+ * with the static bundle. Scripts, styles and fonts load only from this origin
+ * (fonts are self-hosted); the only other origin is the backend. Inline styles stay allowed because
  * the app renders <style> blocks. Dev builds skip it (Vite injects inline
  * scripts for hot reload). frame-ancestors cannot be set from a meta tag: the
  * host serving dist/ must also send `frame-ancestors 'none'` as a header.
@@ -25,8 +25,8 @@ function contentSecurityPolicy(api: string | null): Plugin {
   const policy = [
     "default-src 'self'",
     "script-src 'self'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' data: https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
     "img-src 'self' data: blob:",
     `connect-src 'self'${api ? ` ${api}` : ''}`,
     "worker-src 'self'",

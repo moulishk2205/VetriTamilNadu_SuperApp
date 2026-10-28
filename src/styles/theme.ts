@@ -61,7 +61,6 @@ export const darkColors: Colors = {
 }
 
 export const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..900&family=Noto+Sans+Tamil:wght@300..800&family=Noto+Serif+Tamil:wdth,wght@80,900&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{font-family:'Inter','Noto Sans Tamil',system-ui,sans-serif}
   ::-webkit-scrollbar{width:0}

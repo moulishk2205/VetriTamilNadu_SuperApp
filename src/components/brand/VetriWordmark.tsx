@@ -29,7 +29,6 @@ export function VetriWordmark({ play, still = false }: { play: boolean; still?: 
 export const WORDMARK_FONT = '900 80px "Noto Serif Tamil"'
 
 export const WORDMARK_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Tamil:wdth,wght@80,900&display=swap');
 .vw{display:block;overflow:visible;width:9.6em;max-width:96vw;height:1.62em;font-size:clamp(30px,8.6vw,124px);font-family:'Noto Serif Tamil','Noto Sans Tamil',serif;font-weight:900;font-stretch:80%;letter-spacing:-.012em;transform:scaleY(1.07)}
 .vw text{stroke-linejoin:round;stroke-linecap:round}
 .vw-back{fill:#FFF5F3;stroke:#FFF5F3;stroke-width:.14em;opacity:0;filter:drop-shadow(0 .075em 0 rgba(134,27,19,.3))}

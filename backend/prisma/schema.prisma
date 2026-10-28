@@ -360,6 +360,10 @@ model Application {
   makerOfficerId String?
   /// When the "decision due soon" reminder went out (once per application).
   slaRemindedAt  DateTime?
+  /// Per-stage SLA: when the current stage must be finished (working days,
+  /// holidays excluded), and when that stage deadline was first missed.
+  stageDeadline   DateTime?
+  stageBreachedAt DateTime?
   fields         Json             @default("{}")
   documents      Json             @default("[]")
   timeline       TimelineEvent[]
@@ -390,6 +394,13 @@ model TimelineEvent {
   at            DateTime     @default(now())
 
   @@index([citizenId])
+}
+
+/// Government holiday calendar. Deadlines count working days: Sundays and
+/// these dates are skipped. Edited from the admin portal.
+model Holiday {
+  date String @id // YYYY-MM-DD
+  name String
 }
 
 /// "Seek report": an officer asks a colleague a question about an application;

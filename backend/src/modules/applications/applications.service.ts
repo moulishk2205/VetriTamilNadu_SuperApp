@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Application, ApplicationStage, Officer, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import type { JwtUser } from '../../common/decorators/current-user.decorator'
+import { WorkingCalendar } from '../workflow/calendar.service'
 import { STAGES, WorkflowEngine } from '../workflow/workflow.engine'
 import type { CreateApplicationDto } from './dto/create-application.dto'
 
@@ -24,7 +25,7 @@ export function charterDays(processingTime: string | null | undefined): number {
 
 @Injectable()
 export class ApplicationsService {
-  constructor(private readonly prisma: PrismaService, private readonly engine: WorkflowEngine) {}
+  constructor(private readonly prisma: PrismaService, private readonly engine: WorkflowEngine, private readonly calendar: WorkingCalendar) {}
 
   async list(citizenId: string) {
     const apps = await this.prisma.application.findMany({
@@ -61,7 +62,8 @@ export class ApplicationsService {
         stage: this.engine.initial,
         statusLabel: this.engine.statusLabel(this.engine.initial),
         // Right to Services: the department's published processing time.
-        slaDeadline: new Date(Date.now() + charterDays(service.processingTime) * DAY),
+        // Working days: Sundays and the holiday calendar do not count.
+        slaDeadline: await this.calendar.addWorkingDays(new Date(), charterDays(service.processingTime)),
         fields: dto.fields as object,
         documents: (dto.documents ?? []) as object,
       },
@@ -139,6 +141,12 @@ export class ApplicationsService {
   private async applyTransition(app: Application, to: ApplicationStage, actingOfficer: Officer): Promise<Application> {
     const data: Record<string, unknown> = { stage: to, statusLabel: this.engine.statusLabel(to) }
 
+    // Per-stage SLA: stages with their own SLA (document verification 1,
+    // inspection 3, approval 2 working days) get a fresh stage deadline.
+    const stageSla = this.engine.stage(to)?.slaDays
+    data.stageDeadline = stageSla ? await this.calendar.addWorkingDays(new Date(), stageSla) : null
+    data.stageBreachedAt = null
+
     // Maker-checker: whoever recommends a case into approval is its maker, and
     // the maker cannot also approve it; a second officer must.
     if (to === ApplicationStage.approval) data.makerOfficerId = actingOfficer.id
@@ -213,6 +221,9 @@ export class ApplicationsService {
       officer: officer ? { name: officer.name, designation: officer.designation, jurisdiction: officer.jurisdiction } : null,
       slaDaysRemaining: slaDays,
       slaDeadline: app.slaDeadline?.toISOString() ?? null,
+      // Current stage's own deadline (null when the stage has no SLA).
+      stageDeadline: open && app.stageDeadline ? app.stageDeadline.toISOString() : null,
+      stageDaysRemaining: open && app.stageDeadline ? Math.ceil((app.stageDeadline.getTime() - Date.now()) / DAY) : null,
       overdue: slaDays !== null && slaDays < 0,
       createdAt: app.createdAt.toISOString(),
       updatedAt: app.updatedAt.toISOString(),

@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { complaintsApi, type CreateComplaintInput } from '../api/complaintsApi'
+import { LIVE } from '@/lib/api/live'
 
 export const complaintKeys = { all: ['complaints'] as const }
 
 /** The citizen's filed complaints. Shared by the mobile and desktop shells. */
 export function useComplaintsQuery() {
-  return useQuery({ queryKey: complaintKeys.all, queryFn: complaintsApi.list })
+  return useQuery({ queryKey: complaintKeys.all, queryFn: complaintsApi.list, ...LIVE })
 }
 
 /** File a complaint. Returns the created complaint (with generated reference). */

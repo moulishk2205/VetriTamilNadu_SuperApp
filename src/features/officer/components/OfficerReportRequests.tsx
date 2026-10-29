@@ -5,6 +5,7 @@ import { MessageSquareText } from 'lucide-react'
 import { Card } from '@/components/ui'
 import { useC } from '@/hooks/useUi'
 import { apiClient } from '@/lib/api/client'
+import { LIVE } from '@/lib/api/live'
 
 const Schema = z.object({
   items: z.array(z.object({ id: z.string(), referenceNo: z.string(), serviceName: z.string(), from: z.string(), question: z.string(), answer: z.string().nullable(), createdAt: z.string(), answeredAt: z.string().nullable() })),
@@ -16,7 +17,7 @@ export function OfficerReportRequests() {
   const c = useC()
   const qc = useQueryClient()
   const [drafts, setDrafts] = useState<Record<string, string>>({})
-  const { data } = useQuery({ queryKey: ['officer', 'reports'], queryFn: () => apiClient.get('/officer/reports', { schema: Schema }) })
+  const { data } = useQuery({ queryKey: ['officer', 'reports'], queryFn: () => apiClient.get('/officer/reports', { schema: Schema }), ...LIVE })
   const answer = useMutation({
     mutationFn: ({ id, text }: { id: string; text: string }) => apiClient.post(`/officer/reports/${id}/answer`, { answer: text }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['officer'] }),

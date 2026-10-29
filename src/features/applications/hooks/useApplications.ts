@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { applicationsApi } from '../api/applicationsApi'
+import { LIVE } from '@/lib/api/live'
 
 export const applicationKeys = {
   all: ['applications'] as const,
@@ -7,7 +8,7 @@ export const applicationKeys = {
 }
 
 export function useApplicationsQuery() {
-  return useQuery({ queryKey: applicationKeys.all, queryFn: applicationsApi.list })
+  return useQuery({ queryKey: applicationKeys.all, queryFn: applicationsApi.list, ...LIVE })
 }
 
 export function useApplicationQuery(id: string | undefined) {
@@ -15,6 +16,7 @@ export function useApplicationQuery(id: string | undefined) {
     queryKey: applicationKeys.detail(id ?? ''),
     queryFn: () => applicationsApi.get(id as string),
     enabled: Boolean(id),
+    ...LIVE,
   })
 }
 

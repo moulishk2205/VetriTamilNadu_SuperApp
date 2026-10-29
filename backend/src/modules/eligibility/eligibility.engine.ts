@@ -14,6 +14,7 @@
 
 export type Verdict = 'eligible' | 'not_eligible' | 'needs_info' | 'department_review'
 export type FactKey = 'age' | 'gender' | 'district' | 'annualIncome' | 'landHolder' | 'community'
+  | 'area' | 'kutchaHut' | 'studentLevel' | 'schoolType' | 'occupation' | 'specialCategory'
 export type Facts = Partial<Record<FactKey, string | number>>
 
 export interface Rule { field: string; op: string; value: string }
@@ -33,12 +34,23 @@ const FACT_OF: Record<string, FactKey> = {
   incomeMax: 'annualIncome', annualIncome: 'annualIncome',
   ageMin: 'age', ageMax: 'age', age: 'age',
   categories: 'community', community: 'community',
-  gender: 'gender', district: 'district', landHolder: 'landHolder',
+  gender: 'gender', district: 'district', landHolder: 'landHolder', area: 'area', kutchaHut: 'kutchaHut',
+  studentLevel: 'studentLevel', schoolType: 'schoolType', occupation: 'occupation', specialCategory: 'specialCategory',
 }
 
 export const FACT_LABELS: Record<string, string> = {
   annualIncome: 'Annual income (₹)', age: 'Age', gender: 'Gender', district: 'District',
-  landHolder: 'Owns agricultural land', community: 'Community',
+  landHolder: 'Owns agricultural land', community: 'Community', area: 'Lives in', kutchaHut: 'Lives in a kutcha hut',
+  studentLevel: 'Studying', schoolType: 'School', occupation: 'Occupation', specialCategory: 'Category',
+}
+
+/** Readable names for the fixed value ids rules use. */
+export const VALUE_LABELS: Record<string, string> = {
+  rural: 'a rural area', urban: 'an urban area', 'class-1-5': 'Classes I-V', 'class-6-8': 'Classes VI-VIII',
+  'class-9-10': 'Classes IX-X', 'class-11': 'Class XI', 'class-12': 'Class XII', college: 'college', none: 'none',
+  government: 'Government school', aided: 'Government-aided school', private: 'private school',
+  farmer: 'farmer', 'agricultural-labourer': 'agricultural labourer', 'traditional-fisher': 'traditional fisher', other: 'other',
+  'destitute-widow': 'destitute widow', 'deserted-woman': 'deserted woman', transgender: 'transgender person', disabled: 'person with disability',
 }
 
 const SYMBOL: Record<string, string> = { lte: '≤', lt: '<', gte: '≥', gt: '>', eq: 'is', neq: 'is not', in: 'is one of' }
@@ -49,7 +61,7 @@ const same = (a: string | number, b: string) => {
   return Number.isFinite(x) && Number.isFinite(y) ? x === y : String(a).trim().toLowerCase() === b.trim().toLowerCase()
 }
 const show = (fact: string, v: string | number) =>
-  fact === 'annualIncome' && Number.isFinite(num(v)) ? num(v).toLocaleString('en-IN') : String(v)
+  fact === 'annualIncome' && Number.isFinite(num(v)) ? num(v).toLocaleString('en-IN') : VALUE_LABELS[String(v)] ?? String(v)
 
 function test(op: string, actual: string | number, value: string): boolean | null {
   switch (op) {
@@ -74,7 +86,7 @@ export function evaluate(rules: Rule[], facts: Facts): Evaluation {
   const conditions = rules.map((r): ConditionResult => {
     const fact = factOf(r.field)
     const label = FACT_LABELS[fact] ?? fact
-    const shown = r.op === 'in' ? r.value.split(',').join(', ') : show(fact, r.value)
+    const shown = r.op === 'in' ? r.value.split(',').map((v) => show(fact, v)).join(', ') : show(fact, r.value)
     const actual = (facts as Record<string, string | number | undefined>)[fact]
     const known = actual !== undefined && actual !== null && String(actual).trim() !== ''
     return { text: `${label} ${SYMBOL[r.op] ?? r.op} ${shown}`, fact, actual: known ? actual : undefined, met: known ? test(r.op, actual, r.value) : null }

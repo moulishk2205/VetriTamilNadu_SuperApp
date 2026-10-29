@@ -7,6 +7,6 @@
     "incremental": false,
     "declaration": false
   },
-  "include": ["prisma/seed.ts"],
+  "include": ["prisma/seed.ts", "prisma/schemes.ts", "prisma/sync-schemes.ts"],
   "exclude": ["node_modules", "dist", "src"]
 }

@@ -4,7 +4,7 @@ import { FlaskConical, Upload } from 'lucide-react'
 import { Card, Btn } from '@/components/ui'
 import { useC } from '@/hooks/useUi'
 import { normalizeError } from '@/lib/api/errors'
-import { eligibilityApi, type SampleProfile, type Simulation, type Verdict } from '@/features/schemes/api/eligibilityApi'
+import { eligibilityApi, FACT_INPUTS, type SampleProfile, type Simulation, type Verdict } from '@/features/schemes/api/eligibilityApi'
 
 const VERDICT: Record<Verdict, { label: string; tone: 'ok' | 'err' | 'warn' | 'txt3' }> = {
   eligible: { label: 'Eligible', tone: 'ok' },
@@ -21,7 +21,7 @@ const VERDICT: Record<Verdict, { label: string; tone: 'ok' | 'err' | 'warn' | 't
 export function RuleTester({ collapsible = false }: { collapsible?: boolean }) {
   const c = useC()
   const [open, setOpen] = useState(!collapsible)
-  const [p, setP] = useState({ age: '30', gender: 'Female', district: 'Chennai', annualIncome: '180000', landHolder: 'yes' })
+  const [p, setP] = useState<Record<string, string>>({ age: '30', gender: 'Female', district: 'Chennai', annualIncome: '180000', landHolder: 'yes', area: 'rural' })
   const [draft, setDraft] = useState<{ name: string; xml: string } | null>(null)
   const [result, setResult] = useState<Simulation | null>(null)
   const [error, setError] = useState<string[]>([])
@@ -29,13 +29,10 @@ export function RuleTester({ collapsible = false }: { collapsible?: boolean }) {
 
   const run = useMutation({
     mutationFn: () => {
-      const profile: SampleProfile = {
-        ...(p.age.trim() ? { age: Number(p.age) } : {}),
-        ...(p.gender ? { gender: p.gender } : {}),
-        ...(p.district.trim() ? { district: p.district.trim() } : {}),
-        ...(p.annualIncome.trim() ? { annualIncome: Math.round(Number(p.annualIncome)) } : {}),
-        ...(p.landHolder ? { landHolder: p.landHolder as 'yes' | 'no' } : {}),
-      }
+      const profile: SampleProfile = Object.fromEntries(Object.entries(p)
+        .map(([k, v]) => [k, v.trim()] as const)
+        .filter(([, v]) => v !== '')
+        .map(([k, v]) => [k, k === 'age' || k === 'annualIncome' ? Math.round(Number(v)) : v]))
       return eligibilityApi.simulate(profile, draft?.xml)
     },
     onSuccess: (r) => { setResult(r); setError([]) },
@@ -45,7 +42,7 @@ export function RuleTester({ collapsible = false }: { collapsible?: boolean }) {
     },
   })
 
-  const field = (label: string, key: keyof typeof p, input: React.ReactNode) => (
+  const field = (label: string, key: string, input: React.ReactNode) => (
     <label key={key} style={{ fontSize: 11.5, color: c.txt2, display: 'grid', gap: 4 }}>{label}{input}</label>
   )
   const box = { padding: '8px 10px', borderRadius: 9, border: `1px solid ${c.bdr}`, background: c.card, color: c.txt, fontSize: 13 } as const
@@ -72,11 +69,12 @@ export function RuleTester({ collapsible = false }: { collapsible?: boolean }) {
             ))}
             {field('District', 'district', <input value={p.district} onChange={(e) => setP({ ...p, district: e.target.value })} style={{ ...box, width: 130 }} />)}
             {field('Annual income (₹)', 'annualIncome', <input type="number" min={0} value={p.annualIncome} onChange={(e) => setP({ ...p, annualIncome: e.target.value })} style={{ ...box, width: 130 }} />)}
-            {field('Owns agricultural land', 'landHolder', (
-              <select value={p.landHolder} onChange={(e) => setP({ ...p, landHolder: e.target.value })} style={box}>
-                <option value="">Unknown</option><option value="yes">Yes</option><option value="no">No</option>
+            {FACT_INPUTS.filter((f) => f.options).map((f) => field(f.label, f.key, (
+              <select value={p[f.key] ?? ''} onChange={(e) => setP({ ...p, [f.key]: e.target.value })} style={box}>
+                <option value="">Unknown</option>
+                {f.options!.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
               </select>
-            ))}
+            )))}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <Btn variant="primary" disabled={run.isPending} onClick={() => run.mutate()}>{run.isPending ? 'Testing…' : draft ? 'Test against the draft' : 'Test against live rules'}</Btn>

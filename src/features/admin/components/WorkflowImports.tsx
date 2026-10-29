@@ -141,7 +141,7 @@ export function WorkflowImports() {
                   <b style={{ color: c.txt }}>{ch.scheme}</b>: {conditions(ch.before)} → {conditions(ch.after)}
                   {ch.notInPortal.length > 0 && (
                     <span style={{ display: 'block', fontSize: 11.5, color: c.warn }}>
-                      Kept in the rules and the DMN export, but not shown in the portal's eligibility summary: {ch.notInPortal.join(' · ')}
+                      Used by the eligibility check and kept in the DMN export, but not part of the schemes list's summary: {ch.notInPortal.join(' · ')}
                     </span>
                   )}
                 </>,

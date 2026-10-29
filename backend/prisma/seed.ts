@@ -77,6 +77,14 @@ const SCHEMES = [
   { name: 'Digital Library Initiative', nameTamil: '\u0b9f\u0bbf\u0b9c\u0bbf\u0b9f\u0bcd\u0b9f\u0bb2\u0bcd \u0ba8\u0bc2\u0bb2\u0b95\u0ba4\u0bcd \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'School Education', benefit: 'Free digital library access for students', benefitTamil: '\u0bae\u0bbe\u0ba3\u0bb5\u0bb0\u0bcd\u0b95\u0bb3\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u0b87\u0bb2\u0bb5\u0b9a \u0b9f\u0bbf\u0b9c\u0bbf\u0b9f\u0bcd\u0b9f\u0bb2\u0bcd \u0ba8\u0bc2\u0bb2\u0b95 \u0b85\u0ba3\u0bc1\u0b95\u0bb2\u0bcd', budget: null, score: 66, color: '#8B5CF6', incomeMax: 0, purpose: 'Digital library access for students across Tamil Nadu.' },
 ]
 
+// Conditions each scheme's own purpose line states (land-holding farmers,
+// brides, women), so the eligibility engine does not offer them to anyone else.
+const EXTRA_RULES: Record<string, { field: string; op: string; value: string }[]> = {
+  'PM Kisan Samman Nidhi': [{ field: 'landHolder', op: 'eq', value: 'yes' }],
+  'Annanin Seer Scheme': [{ field: 'gender', op: 'eq', value: 'Female' }],
+  "Vetri Women's Goat Rearing Scheme": [{ field: 'gender', op: 'eq', value: 'Female' }],
+}
+
 const FIRST = ['Arun', 'Priya', 'Karthik', 'Divya', 'Suresh', 'Lakshmi', 'Vijay', 'Meena', 'Rajesh', 'Anitha', 'Bala', 'Kavya', 'Senthil', 'Deepa', 'Ganesh', 'Revathi', 'Muthu', 'Nithya', 'Ramesh', 'Shanthi']
 const LAST = ['Kumar', 'Raj', 'Murugan', 'Krishnan', 'Sundaram', 'Palani', 'Natarajan', 'Selvam', 'Ramachandran', 'Subramaniam']
 const COMPLAINT_CATS = ['Road Damage', 'Water Supply', 'Streetlight', 'Garbage', 'Drainage', 'Illegal Encroachment', 'Stray Animals']
@@ -97,7 +105,7 @@ async function main() {
     prisma.aiMessage.deleteMany(), prisma.conversation.deleteMany(), prisma.payment.deleteMany(),
     prisma.attachment.deleteMany(), prisma.comment.deleteMany(), prisma.timelineEvent.deleteMany(),
     prisma.reportRequest.deleteMany(), prisma.application.deleteMany(), prisma.complaint.deleteMany(), prisma.notification.deleteMany(),
-    prisma.document.deleteMany(), prisma.address.deleteMany(), prisma.eligibilityRule.deleteMany(),
+    prisma.schemeClaim.deleteMany(), prisma.document.deleteMany(), prisma.address.deleteMany(), prisma.eligibilityRule.deleteMany(),
     prisma.scheme.deleteMany(), prisma.auditLog.deleteMany(), prisma.session.deleteMany(),
     prisma.refreshToken.deleteMany(), prisma.otp.deleteMany(), prisma.workflowStep.deleteMany(),
     prisma.workflow.deleteMany(), prisma.service.deleteMany(), prisma.serviceCategory.deleteMany(),
@@ -187,6 +195,7 @@ async function main() {
       },
     })
     if (base.incomeMax) await prisma.eligibilityRule.create({ data: { schemeId: scheme.id, field: 'incomeMax', op: 'lte', value: String(base.incomeMax) } })
+    for (const r of EXTRA_RULES[base.name] ?? []) await prisma.eligibilityRule.create({ data: { schemeId: scheme.id, ...r } })
   }
   console.log(`  \u2713 ${SCHEMES.length} welfare schemes (2026 catalogue, no placeholders)`)
 

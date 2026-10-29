@@ -5,13 +5,14 @@ import { resolveIcon } from '@/components/ui/iconRegistry'
 import type { Colors } from '@/styles/theme'
 import { useAuthStore } from '@/store/authStore'
 import { notificationsApi } from '../api/notificationsApi'
+import { LIVE } from '@/lib/api/live'
 
 export const notificationKeys = { all: ['notifications'] as const }
 
 /** Notifications belong to a citizen; staff sessions have none to fetch. */
 export function useNotificationsQuery() {
   const isCitizen = useAuthStore((s) => s.isAuthenticated && s.role === 'citizen')
-  return useQuery({ queryKey: notificationKeys.all, queryFn: notificationsApi.list, enabled: isCitizen })
+  return useQuery({ queryKey: notificationKeys.all, queryFn: notificationsApi.list, enabled: isCitizen, ...LIVE })
 }
 
 /** View shape consumed by NotificationsScreen. Icon strings → components and

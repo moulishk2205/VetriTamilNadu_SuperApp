@@ -6,6 +6,7 @@ import { Card } from '@/components/ui'
 import { useC } from '@/hooks/useUi'
 import { apiClient } from '@/lib/api/client'
 import { ComplaintSchema, type Complaint } from '@/types/models/complaint'
+import { LIVE } from '@/lib/api/live'
 
 const QueueSchema = z.object({ items: z.array(ComplaintSchema), total: z.number(), open: z.number() })
 type Action = 'start' | 'escalate' | 'resolve' | 'close'
@@ -29,7 +30,7 @@ const LABEL: Record<string, string> = { submitted: 'New', assigned: 'Assigned', 
 export function OfficerGrievances() {
   const c = useC()
   const qc = useQueryClient()
-  const { data } = useQuery({ queryKey: ['officer', 'grievances'], queryFn: () => apiClient.get('/officer/grievances', { schema: QueueSchema }) })
+  const { data } = useQuery({ queryKey: ['officer', 'grievances'], queryFn: () => apiClient.get('/officer/grievances', { schema: QueueSchema }), ...LIVE })
   const [noteFor, setNoteFor] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const act = useMutation({

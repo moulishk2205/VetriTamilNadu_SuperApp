@@ -1,0 +1,106 @@
+# Continuous integration: typecheck, unit tests and builds for both apps,
+# then the whole stack in containers with the API end-to-end suite against it.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Web portal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: /api
+      - name: Licence check (SBOM)
+        run: npm run sbom
+
+  backend:
+    name: API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: Stack end-to-end
+    needs: [frontend, backend]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Throwaway secrets
+        run: |
+          printf 'POSTGRES_PASSWORD=%s\nREDIS_PASSWORD=%s\nJWT_ACCESS_SECRET=%s\n' \
+            "$(openssl rand -hex 16)" "$(openssl rand -hex 16)" "$(openssl rand -hex 32)" > .env
+      - name: Start the stack (demo mode, seeded)
+        run: docker compose up -d --build --wait --wait-timeout 300
+        env:
+          AUTH_MOCK: 'true'
+          SEED_ON_BOOT: 'true'
+      - run: npm ci
+      - name: API end-to-end tests
+        run: npm run test:e2e
+        env:
+          E2E_BASE_URL: http://localhost:4000
+      - name: Web portal smoke test
+        # Each response is read in full before grep, so an early grep exit
+        # cannot break curl's pipe. One command per line, so errexit stops on
+        # the first failure (a failure left of && would not stop it).
+        run: |
+          set -euo pipefail
+          page=$(curl -fsS http://localhost:8080/)
+          grep -q '<div id="root">' <<< "$page"
+          spa=$(curl -fsS http://localhost:8080/verify/ANY)
+          grep -q '<div id="root">' <<< "$spa"
+          api=$(curl -fsS http://localhost:8080/api/schemes)
+          grep -q '"items"' <<< "$api"
+          head=$(curl -fsSI http://localhost:8080/)
+          grep -qi '^x-frame-options: DENY' <<< "$head"
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v

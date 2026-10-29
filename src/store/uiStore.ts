@@ -42,3 +42,11 @@ export const useUiStore = create<UiState>()(
     { name: 'vetri.ui', version: 1 },
   ),
 )
+
+// The page language follows the chosen language, so screen readers, browser
+// translation and hyphenation treat Tamil as Tamil (WCAG 3.1.1).
+const syncPageLang = (lang: Lang) => {
+  if (typeof document !== 'undefined') document.documentElement.lang = lang
+}
+syncPageLang(useUiStore.getState().lang)
+useUiStore.subscribe((s) => syncPageLang(s.lang))

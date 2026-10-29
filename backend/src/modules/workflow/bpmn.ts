@@ -164,6 +164,9 @@ export function toBpmnXml(model: ProcessModel): string {
 
 const BPMN_MODEL_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL'
 const TASK_TAGS = ['task', 'userTask', 'serviceTask', 'manualTask', 'scriptTask', 'businessRuleTask', 'sendTask', 'receiveTask']
+/** Task types for steps a person performs, and for steps that run automatically. */
+const HUMAN_TASKS = ['userTask', 'manualTask']
+const AUTOMATIC_TASKS = ['serviceTask', 'scriptTask', 'businessRuleTask', 'sendTask']
 /** Elements that change behaviour in ways the running workflow has no counterpart for. */
 const UNSUPPORTED_TAGS = ['callActivity', 'subProcess', 'parallelGateway', 'inclusiveGateway', 'eventBasedGateway', 'complexGateway', 'intermediateThrowEvent', 'intermediateCatchEvent', 'boundaryEvent']
 
@@ -172,16 +175,28 @@ export interface ConformanceReport {
   process: { id: string; name?: string }
   tasks: number
   flows: number
+  /** Tasks whose "Actor: … · SLA n day(s)" note was compared (notes are optional). */
+  notesCompared: number
   /** Every way the file differs from the running workflow, in plain words. */
   differences: string[]
+}
+
+/** Text of a BPMN <documentation> child, '' when there is none. */
+function documentationOf(el: Record<string, unknown>): string {
+  const d = Array.isArray(el.documentation) ? el.documentation[0] : el.documentation
+  if (typeof d === 'string') return d
+  if (d && typeof d === 'object' && typeof (d as Record<string, unknown>)['#text'] === 'string') return (d as Record<string, string>)['#text']
+  return ''
 }
 
 /**
  * Checks an uploaded BPMN 2.0 file, typically our export after editing in a
  * modeller, against the workflow the engine runs. Tasks are matched to stages
- * by id, or by label; end events by "Completed" / "Rejected". The engine runs
- * its built-in definition, so a file can be checked, not deployed: a
- * difference means the file no longer describes what actually happens.
+ * by id, or by label; end events by "Completed" / "Rejected". Compared: the
+ * stages, every transition in both directions, whether each step is done by a
+ * person or runs automatically, and the "Actor / SLA" note where a task has
+ * one. The engine runs its built-in definition, so a file can be checked, not
+ * deployed: a difference means the file no longer describes what happens.
  */
 export function checkBpmnConformance(xml: string): ConformanceReport {
   const defs = parseXml(xml).definitions
@@ -192,13 +207,20 @@ export function checkBpmnConformance(xml: string): ConformanceReport {
 
   const differences: string[] = []
   const label = (s: ApplicationStage) => STAGES.find((x) => x.id === s)?.label ?? s
-  const nodes = new Map<string, { tag: string; name: string }>()
+  const nodes = new Map<string, { tag: string; name: string; el: Record<string, unknown> }>()
   for (const tag of [...TASK_TAGS, ...UNSUPPORTED_TAGS, 'exclusiveGateway', 'startEvent', 'endEvent']) {
     for (const el of many(proc, tag)) {
       const id = attr(el, 'id')
       if (!id) { differences.push(`A ${tag} has no id`); continue }
-      nodes.set(id, { tag, name: (attr(el, 'name') ?? '').trim() })
-      if (UNSUPPORTED_TAGS.includes(tag)) differences.push(`"${attr(el, 'name') || id}" is a ${tag}, which the running workflow does not have`)
+      const name = (attr(el, 'name') ?? '').trim()
+      nodes.set(id, { tag, name, el })
+      if (UNSUPPORTED_TAGS.includes(tag)) differences.push(`"${name || id}" is a ${tag}, which the running workflow does not have`)
+      if (el.multiInstanceLoopCharacteristics !== undefined || el.standardLoopCharacteristics !== undefined) {
+        differences.push(`"${name || id}" repeats (loop or multi-instance), which the running workflow does not do`)
+      }
+      for (const key of Object.keys(el).filter((k) => k.endsWith('EventDefinition'))) {
+        differences.push(`"${name || id}" has a ${key}, which the running workflow does not have`)
+      }
     }
   }
   const flows = many(proc, 'sequenceFlow').map((f) => ({ id: attr(f, 'id') ?? '?', from: attr(f, 'sourceRef') ?? '', to: attr(f, 'targetRef') ?? '' }))
@@ -216,6 +238,27 @@ export function checkBpmnConformance(xml: string): ConformanceReport {
     stageOf.set(id, stage)
     taskFor.set(stage, id)
   }
+
+  // Who performs each step, and its SLA, where the file says.
+  let notesCompared = 0
+  for (const [stage, taskId] of taskFor) {
+    const def = STAGES.find((s) => s.id === stage)!
+    const n = nodes.get(taskId)!
+    const automatic = def.actor === 'system'
+    if (automatic ? !AUTOMATIC_TASKS.includes(n.tag) : !HUMAN_TASKS.includes(n.tag)) {
+      differences.push(`"${def.label}" is a ${n.tag}, but in the running workflow it ${automatic ? 'runs automatically (serviceTask)' : `is done by a person, the ${def.actor} (userTask)`}`)
+    }
+    const note = documentationOf(n.el)
+    const actor = /Actor:\s*([^·\n]+?)\s*(?:·|$)/m.exec(note)?.[1]
+    if (!actor) continue
+    notesCompared += 1
+    if (actor !== def.actor) differences.push(`"${def.label}": the file says actor "${actor}", the running workflow has "${def.actor}"`)
+    const sla = /SLA\s+(\d+)\s*day/.exec(note)?.[1]
+    const want = def.slaDays
+    if ((sla === undefined ? undefined : Number(sla)) !== want) {
+      differences.push(`"${def.label}": the file says ${sla ? `an SLA of ${sla} day(s)` : 'no SLA'}, the running workflow has ${want ? `${want} day(s)` : 'none'}`)
+    }
+  }
   const endStage = (id: string): ApplicationStage | undefined => {
     const name = nodes.get(id)?.name.toLowerCase()
     if (name === 'completed' || id.startsWith('end_completed')) return ApplicationStage.completed
@@ -227,19 +270,27 @@ export function checkBpmnConformance(xml: string): ConformanceReport {
   }
   for (const f of flows) {
     if (!nodes.has(f.from) || !nodes.has(f.to)) differences.push(`Flow ${f.id} connects an element the check does not know ("${f.from}" → "${f.to}")`)
+    else if (nodes.get(f.from)!.tag === 'endEvent') differences.push(`Flow ${f.id} leaves the end event "${nodes.get(f.from)!.name || f.from}"; a finished application cannot move on`)
+    else if (nodes.get(f.to)!.tag === 'startEvent') differences.push(`Flow ${f.id} leads back into the start event`)
   }
 
-  /** Stages one step after `id`, passing through exclusive gateways. */
+  /**
+   * Stages one step after `id`, passing through exclusive gateways. Only
+   * gateways are marked as walked, so a flow back to the step itself (a loop
+   * the engine does not have) is still found.
+   */
   const next = (id: string): Set<ApplicationStage> => {
     const found = new Set<ApplicationStage>()
-    const seen = new Set<string>([id])
+    const walked = new Set<string>()
     const walk = (from: string) => {
       for (const f of flows.filter((x) => x.from === from)) {
         const n = nodes.get(f.to)
-        if (!n || seen.has(f.to)) continue
-        seen.add(f.to)
-        if (n.tag === 'exclusiveGateway') walk(f.to)
-        else if (n.tag === 'endEvent') { const s = endStage(f.to); if (s) found.add(s) }
+        if (!n) continue
+        if (n.tag === 'exclusiveGateway') {
+          if (walked.has(f.to)) continue
+          walked.add(f.to)
+          walk(f.to)
+        } else if (n.tag === 'endEvent') { const s = endStage(f.to); if (s) found.add(s) }
         else if (stageOf.has(f.to)) found.add(stageOf.get(f.to)!)
       }
     }
@@ -269,6 +320,7 @@ export function checkBpmnConformance(xml: string): ConformanceReport {
     process: { id: attr(proc, 'id') ?? '', name: attr(proc, 'name') },
     tasks: [...nodes.values()].filter((n) => TASK_TAGS.includes(n.tag)).length,
     flows: flows.length,
+    notesCompared,
     differences: unique,
   }
 }

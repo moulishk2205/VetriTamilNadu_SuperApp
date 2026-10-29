@@ -71,6 +71,25 @@ describe('AuditService hash chain', () => {
     expect((await audit.verify()).valid).toBe(true)
   })
 
+  it('chains several rows written inside one caller transaction', async () => {
+    const { rows, audit } = await chainOf(2)
+    const tx = { $executeRaw: async () => 0, auditLog: (fakePrisma(rows) as unknown as { auditLog: unknown }).auditLog }
+    await audit.recordIn(tx as never, [
+      { actor: 'ADMIN:a', action: 'eligibility-import', entity: 'scheme', entityId: 's1', note: 'One', meta: { before: ['x'], after: [] } },
+      { actor: 'ADMIN:a', action: 'eligibility-import', entity: 'scheme', entityId: 's2', note: 'Two', meta: { before: [], after: ['y'] } },
+    ])
+    await audit.record({ actor: 'b', action: 'X', entity: 'E', entityId: '1' })
+    expect(rows).toHaveLength(5)
+    expect(rows[3].prevHash).toBe(rows[2].hash)
+    expect(await audit.verify()).toEqual({ valid: true, rows: 5, chained: 5, legacy: 0 })
+  })
+
+  it('lets a failure inside recordIn reach the caller', async () => {
+    const audit = new AuditService(fakePrisma([]))
+    const broken = { $executeRaw: async () => { throw new Error('lock failed') }, auditLog: {} }
+    await expect(audit.recordIn(broken as never, [{ actor: 'a', action: 'X', entity: 'E', entityId: '1' }])).rejects.toThrow('lock failed')
+  })
+
   it('accepts unhashed rows only before the chain starts', async () => {
     const legacy: Row = { id: 'seed', seq: 0n, actor: 'seed', action: 'SEED', entity: 'System', entityId: '-', note: null, meta: null, at: new Date(0), prevHash: null, hash: null }
     const rows: Row[] = [legacy]

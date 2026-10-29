@@ -36,7 +36,14 @@ export function parseXml(xml: string): Record<string, unknown> {
   if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new XmlImportError(['The file declares a DOCTYPE or entities, which are not accepted'])
   const valid = XMLValidator.validate(xml)
   if (valid !== true) throw new XmlImportError([`The file is not well-formed XML: ${valid.err.msg} (line ${valid.err.line})`])
-  return parser.parse(xml) as Record<string, unknown>
+  try {
+    return parser.parse(xml) as Record<string, unknown>
+  } catch (e) {
+    // The validator lets a few malformed inputs through (e.g. a broken <?xml?>
+    // declaration, or nesting deeper than the parser allows); the parser then
+    // throws. Those are still the file's fault: report them, never as a 500.
+    throw new XmlImportError([`The file could not be read as XML: ${e instanceof Error ? e.message : String(e)}`])
+  }
 }
 
 /** Attribute value, or undefined. */

@@ -2,8 +2,10 @@
  * End-to-end checks against a running API with demo data:
  *   AUTH_MOCK=true SEED_ON_BOOT=true docker compose up -d
  *   E2E_BASE_URL=http://localhost:4000 npm run test:e2e
- * Each run uses 1 OTP request and 2 OTP verifies, within the limit of
- * 5 per minute per route.
+ * Each run uses 1 OTP request and 2 OTP verifies, against a limit of 5 per
+ * minute per route and client, so run it at most twice a minute against one
+ * stack. The DMN test changes one income ceiling and restores it, even when
+ * it fails part-way.
  */
 const BASE = (process.env.E2E_BASE_URL ?? 'http://localhost:4000').replace(/\/$/, '')
 
@@ -22,6 +24,12 @@ async function call(method: string, path: string, opts: { token?: string; body?:
   let body: any = null
   try { body = JSON.parse(text) } catch { /* not JSON */ }
   return { status: res.status, body, text, type: res.headers.get('content-type') ?? '' }
+}
+
+/** A 429 means the suite was re-run too fast, not that sign-in is broken. */
+function notThrottled(r: Call): Call {
+  if (r.status === 429) throw new Error('Auth rate limit reached (5 per minute per route): wait 60 seconds and run the suite again')
+  return r
 }
 
 const demo = async (persona: string) => {
@@ -46,13 +54,13 @@ describe('Sign-in and sessions', () => {
   const mobile = '9876543210'
 
   it('signs in with a one-time code, and a wrong code fails', async () => {
-    const req = await call('POST', '/api/auth/otp/request', { body: { identifier: mobile } })
+    const req = notThrottled(await call('POST', '/api/auth/otp/request', { body: { identifier: mobile } }))
     expect(req.status).toBe(201)
     expect(req.body).toMatchObject({ sent: true, demoOtp: '123456' })
 
-    expect((await call('POST', '/api/auth/verify', { body: { method: 'otp', identifier: mobile, otp: '000000' } })).status).toBe(401)
+    expect(notThrottled(await call('POST', '/api/auth/verify', { body: { method: 'otp', identifier: mobile, otp: '000000' } })).status).toBe(401)
 
-    const ok = await call('POST', '/api/auth/verify', { body: { method: 'otp', identifier: mobile, otp: '123456' } })
+    const ok = notThrottled(await call('POST', '/api/auth/verify', { body: { method: 'otp', identifier: mobile, otp: '123456' } }))
     expect(ok.status).toBe(201)
     expect(ok.body.role).toBe('citizen')
     const me = await call('GET', '/api/auth/me', { token: ok.body.tokens.accessToken })

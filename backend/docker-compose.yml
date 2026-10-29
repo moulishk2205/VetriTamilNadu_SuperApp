@@ -7,7 +7,9 @@
 #   AUTH_MOCK=true      fixed OTP 123456 + Demo Mode personas
 #   SEED_ON_BOOT=true   seed demo data when the database is empty
 #
-# Published: the web portal (8080) and the API (4000). Postgres and Redis are reachable only on the
+# The web portal (8080) is the public entry point. The API (4000) is published
+# on the host's loopback only, for tools and tests on the host; browsers reach it
+# through the portal's /api proxy. Postgres and Valkey are reachable only on the
 # compose network. For local development from the host, add the loopback-only
 # override: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 services:
@@ -28,7 +30,7 @@ services:
       retries: 10
 
   # Valkey (BSD-3-Clause), the Linux Foundation fork of Redis: same protocol,
-  # no source-available licence (Redis 7.4+ is RSALv2/SSPLv1). The service keeps
+  # no copyleft (Redis 7.4+ is RSALv2/SSPLv1; Redis 8 adds AGPLv3). The service keeps
   # the name `redis` so REDIS_HOST and client libraries work unchanged.
   redis:
     image: valkey/valkey:8.1-alpine
@@ -69,9 +71,13 @@ services:
       SEED_ON_BOOT: ${SEED_ON_BOOT:-false}
       SWAGGER: ${SWAGGER:-false}
       SLA_SWEEP_MINUTES: ${SLA_SWEEP_MINUTES:-15}
-      TRUST_PROXY: ${TRUST_PROXY:-}
+      # One trusted hop (the portal's nginx, or the Vite dev proxy), so rate
+      # limits and audit rows use each visitor's address. Safe because the API
+      # port is published on loopback only: remote clients cannot reach it
+      # directly with a forged X-Forwarded-For.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
     ports:
-      - '4000:4000'
+      - '127.0.0.1:4000:4000'
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://localhost:4000/health']
       interval: 10s
@@ -81,9 +87,8 @@ services:
 
   # Web portal: the built SPA served by nginx as a non-root user on 8080, with
   # /api proxied to the backend so the browser talks to a single origin.
-  # nginx forwards X-Forwarded-For; to rate-limit per visitor rather than per
-  # proxy, set TRUST_PROXY=1 and stop publishing 4000 so clients cannot reach
-  # the API directly with a forged header.
+  # nginx forwards X-Forwarded-For, which the API trusts for one hop
+  # (TRUST_PROXY above).
   web:
     build:
       context: ..

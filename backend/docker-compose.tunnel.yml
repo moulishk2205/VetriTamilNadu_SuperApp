@@ -1,0 +1,18 @@
+# Optional, for demos: a public Cloudflare quick tunnel to the web portal.
+# It runs in Docker next to the stack and restarts with it, so the public
+# address does not depend on any terminal or editor session. The address is
+# random (https://*.trycloudflare.com), printed in the logs, and changes when
+# the container is recreated. For a fixed address, use a named tunnel.
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d tunnel
+#   docker logs vetri-tunnel 2>&1 | grep trycloudflare
+# Behind it, set TRUST_PROXY=2 (Cloudflare, then the portal's nginx), so each
+# visitor gets their own rate limit.
+services:
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.0
+    container_name: vetri-tunnel
+    restart: unless-stopped
+    command: ['tunnel', '--no-autoupdate', '--url', 'http://web:8080']
+    depends_on:
+      web:
+        condition: service_healthy

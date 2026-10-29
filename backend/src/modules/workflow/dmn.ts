@@ -6,6 +6,7 @@
  * "department review", so the export never claims eligibility it cannot check.
  * `readDmnDecisions` reads such a file back after it was edited in a modeller.
  */
+import { PORTAL_KEYS } from '../catalog/eligibility'
 import { attr, many, parseXml, textOf, XmlImportError } from './xml'
 
 export interface SchemeRules {
@@ -214,21 +215,21 @@ function splitList(text: string): string[] {
  * a single value, a list of values, or not(value). Anything else is refused
  * with a reason, rather than stored as something it is not.
  */
-function parseUnaryTest(text: string, typeRef: string | undefined): { op: string; value: string } | string {
+function parseUnaryTest(text: string, typeRef: string | undefined): { op: string; value: string; kind: Literal['kind'] } | string {
   const mismatch = (l: Literal) => (typeRef === 'number' || typeRef === 'string') && l.kind !== typeRef
   const cmp = /^(<=|>=|<|>)\s*(.+)$/.exec(text)
   if (cmp) {
     const l = literalOf(cmp[2])
     if (!l || l.kind !== 'number') return `"${text}": a comparison needs a number`
     if (mismatch(l)) return `"${text}": the column holds ${typeRef}s`
-    return { op: { '<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt' }[cmp[1]] as string, value: l.value }
+    return { op: { '<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt' }[cmp[1]] as string, value: l.value, kind: 'number' }
   }
   const neg = /^not\((.*)\)$/.exec(text)
   if (neg) {
     const l = literalOf(neg[1])
     if (!l) return `"${text}": not() can hold one value only`
     if (mismatch(l)) return `"${text}": the column holds ${typeRef}s`
-    return { op: 'neq', value: l.value }
+    return { op: 'neq', value: l.value, kind: l.kind }
   }
   const items = splitList(text).map(literalOf)
   if (items.some((l) => l === null)) {
@@ -236,9 +237,16 @@ function parseUnaryTest(text: string, typeRef: string | undefined): { op: string
   }
   const lits = items as Literal[]
   if (lits.some(mismatch) || new Set(lits.map((l) => l.kind)).size > 1) return `"${text}": the values must all be ${typeRef ?? 'of one type'}`
-  if (lits.length === 1) return { op: 'eq', value: lits[0].value }
+  if (lits.length === 1) return { op: 'eq', value: lits[0].value, kind: lits[0].kind }
   if (lits.some((l) => l.value.includes(','))) return `"${text}": a listed value cannot contain a comma`
-  return { op: 'in', value: lits.map((l) => l.value).join(',') }
+  return { op: 'in', value: lits.map((l) => l.value).join(','), kind: lits[0].kind }
+}
+
+const RESERVED_MEANING: Record<string, string> = {
+  incomeMax: '"<= number" (the income ceiling)',
+  ageMin: '">= number"',
+  ageMax: '"<= number"',
+  categories: 'a text value or a list of text values',
 }
 
 /** The rule-store field for a DMN input: the income ceiling keeps its catalogue name. */
@@ -278,7 +286,14 @@ function readTable(table: Record<string, unknown>, where: string): RuleSpec[] | 
     if (entry === '-' || entry === '') continue
     const test = parseUnaryTest(entry, input.name === ANNUAL_INCOME.name ? 'number' : input.typeRef)
     if (typeof test === 'string') return `${where}, ${input.name}: ${test}`
-    specs.push({ field: fieldFor(input.name, test.op), ...test })
+    const field = fieldFor(input.name, test.op)
+    // The portal's eligibility summary reads these names with one meaning
+    // each; anything else under them would be served in a shape it rejects.
+    const reserved = PORTAL_KEYS[field as keyof typeof PORTAL_KEYS]
+    if (reserved && (!reserved.op.includes(test.op) || reserved.kind !== test.kind)) {
+      return `${where}, ${input.name}: the portal reads "${field}" only as ${RESERVED_MEANING[field]}`
+    }
+    specs.push({ field, op: test.op, value: test.value })
   }
   // An unconditional "eligible" is not something the store can say: no rules
   // means "the department decides", which is what the literal is for.

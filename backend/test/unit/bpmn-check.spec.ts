@@ -67,6 +67,53 @@ describe('BPMN import check', () => {
     expect(checkBpmnConformance(xml).differences).toContain('End event "Archived" must be named "Completed" or "Rejected"')
   })
 
+  it('compares the actor/SLA note of every task in our export', () => {
+    expect(checkBpmnConformance(exported).notesCompared).toBe(model.nodes.filter((n) => n.kind === 'task').length)
+  })
+
+  it('reports a step that loops back to itself, directly or through its gateway', () => {
+    expect(checkBpmnConformance(withFlow(exported, 'gw_inspection', 'inspection')).differences)
+      .toContain('Not in the running workflow: "Inspection" → "Inspection"')
+    expect(checkBpmnConformance(withFlow(exported, 'notified', 'notified')).differences)
+      .toContain('Not in the running workflow: "Citizen Notified" → "Citizen Notified"')
+  })
+
+  it('reports flows out of an end event or into the start event', () => {
+    const fromEnd = checkBpmnConformance(withFlow(exported, 'end_rejected_approval', 'submitted'))
+    expect(fromEnd.conforms).toBe(false)
+    expect(fromEnd.differences.join('\n')).toContain('leaves the end event "Rejected"')
+    expect(checkBpmnConformance(withFlow(exported, 'officerAssigned', 'start')).differences.join('\n')).toContain('leads back into the start event')
+  })
+
+  it('reports a human step made automatic, and the reverse', () => {
+    const swapped = exported
+      .replace('<bpmn:userTask id="inspection" name="Inspection">', '<bpmn:serviceTask id="inspection" name="Inspection">')
+      .replace(/(<bpmn:serviceTask id="inspection"[\s\S]*?)<\/bpmn:userTask>/, '$1</bpmn:serviceTask>')
+    expect(checkBpmnConformance(swapped).differences).toContain('"Inspection" is a serviceTask, but in the running workflow it is done by a person, the officer (userTask)')
+    const manual = exported
+      .replace('<bpmn:serviceTask id="docVerification" name="Document Verification">', '<bpmn:userTask id="docVerification" name="Document Verification">')
+      .replace(/(<bpmn:userTask id="docVerification"[\s\S]*?)<\/bpmn:serviceTask>/, '$1</bpmn:userTask>')
+    expect(checkBpmnConformance(manual).differences).toContain('"Document Verification" is a userTask, but in the running workflow it runs automatically (serviceTask)')
+  })
+
+  it('reports an edited actor or SLA note', () => {
+    const edited = exported.replace('Actor: officer · SLA 3 day(s)', 'Actor: citizen · SLA 30 day(s)')
+    const { differences } = checkBpmnConformance(edited)
+    expect(differences).toContain('"Inspection": the file says actor "citizen", the running workflow has "officer"')
+    expect(differences).toContain('"Inspection": the file says an SLA of 30 day(s), the running workflow has 3 day(s)')
+    const dropped = checkBpmnConformance(exported.replace('Actor: officer · SLA 3 day(s)', 'Actor: officer'))
+    expect(dropped.differences).toContain('"Inspection": the file says no SLA, the running workflow has 3 day(s)')
+  })
+
+  it('reports loops, multi-instance and event definitions', () => {
+    const xml = exported
+      .replace('<bpmn:userTask id="approval" name="Approval">', '<bpmn:userTask id="approval" name="Approval"><bpmn:multiInstanceLoopCharacteristics isSequential="false" />')
+      .replace('<bpmn:endEvent id="end_completed" name="Completed">', '<bpmn:endEvent id="end_completed" name="Completed"><bpmn:terminateEventDefinition />')
+    const { differences } = checkBpmnConformance(xml)
+    expect(differences).toContain('"Approval" repeats (loop or multi-instance), which the running workflow does not do')
+    expect(differences).toContain('"Completed" has a terminateEventDefinition, which the running workflow does not have')
+  })
+
   it('refuses files that are not BPMN', () => {
     expect(() => checkBpmnConformance('<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/"/>')).toThrow(XmlImportError)
     expect(() => checkBpmnConformance('<a><b></a>')).toThrow(/not well-formed/)

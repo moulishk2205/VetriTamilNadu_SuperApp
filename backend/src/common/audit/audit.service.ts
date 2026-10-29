@@ -60,15 +60,24 @@ export class AuditService {
   }
 
   private async append(e: AuditEntry): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${CHAIN_LOCK})`
-      const last = await tx.auditLog.findFirst({ where: { hash: { not: null } }, orderBy: { seq: 'desc' }, select: { hash: true } })
-      const prevHash = last?.hash ?? GENESIS
+    await this.prisma.$transaction((tx) => this.recordIn(tx, [e]))
+  }
+
+  /**
+   * Appends rows inside the caller's transaction, so a change and its audit
+   * rows commit together or not at all. Unlike record(), failures propagate.
+   */
+  async recordIn(tx: Prisma.TransactionClient, entries: AuditEntry[]): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${CHAIN_LOCK})`
+    const last = await tx.auditLog.findFirst({ where: { hash: { not: null } }, orderBy: { seq: 'desc' }, select: { hash: true } })
+    let prevHash = last?.hash ?? GENESIS
+    for (const e of entries) {
       const at = new Date()
       const meta = e.meta ? (JSON.parse(JSON.stringify(e.meta)) as Prisma.InputJsonValue) : undefined
       const hash = rowHash(prevHash, { actor: e.actor, action: e.action, entity: e.entity, entityId: e.entityId, note: e.note ?? null, meta: meta ?? null, at })
       await tx.auditLog.create({ data: { actor: e.actor, action: e.action, entity: e.entity, entityId: e.entityId, note: e.note, meta, at, prevHash, hash } })
-    })
+      prevHash = hash
+    }
   }
 
   async verify(): Promise<ChainReport> {

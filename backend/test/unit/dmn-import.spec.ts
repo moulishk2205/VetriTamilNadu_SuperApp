@@ -115,7 +115,33 @@ describe('DMN import: what it refuses, with a reason', () => {
   })
 })
 
+describe('DMN import: names the portal reads with one meaning', () => {
+  const one = (field: string, op: string, value: string) => toDmnXml([scheme('s', 'S', [{ field, op, value }])])
+
+  it('accepts them used as the portal reads them', () => {
+    expect(readDmnDecisions(one('ageMin', 'gte', '18'))[0].rules).toEqual([{ field: 'ageMin', op: 'gte', value: '18' }])
+    expect(readDmnDecisions(one('ageMax', 'lte', '60'))[0].rules).toEqual([{ field: 'ageMax', op: 'lte', value: '60' }])
+    expect(readDmnDecisions(one('categories', 'in', 'BC,MBC'))[0].rules).toEqual([{ field: 'categories', op: 'in', value: 'BC,MBC' }])
+  })
+
+  it('refuses them with another operator or type, which would break the schemes list', () => {
+    expect(problemsOf(one('ageMin', 'gte', '18').replace('&gt;= 18', '&lt; 18'))[0]).toContain('the portal reads "ageMin" only as ">= number"')
+    expect(problemsOf(one('ageMax', 'lte', '60').replace('&lt;= 60', '60'))[0]).toContain('the portal reads "ageMax" only as "<= number"')
+    const numericCategory = one('categories', 'in', 'BC,MBC').replace('&quot;BC&quot;, &quot;MBC&quot;', '5').replace(/typeRef="string"/g, 'typeRef="number"')
+    expect(problemsOf(numericCategory)[0]).toContain('the portal reads "categories" only as a text value or a list of text values')
+    const ceiling = withEntry('< 5').replace('<text>annualIncome</text>', '<text>incomeMax</text>')
+    expect(problemsOf(ceiling)[0]).toContain('the portal reads "incomeMax" only as "<= number" (the income ceiling)')
+  })
+})
+
 describe('DMN import: file-level checks', () => {
+  it('reports XML the validator lets through but the parser cannot read, never as a crash', () => {
+    const declaration = toDmnXml([scheme('a', 'A')]).replace('<?xml version="1.0" encoding="UTF-8"?>', '<?xml version="1="UTF-8"?>')
+    expect(problemsOf(declaration)[0]).toMatch(/not well-formed|could not be read as XML/)
+    const deep = `<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/">${'<x>'.repeat(150)}${'</x>'.repeat(150)}</definitions>`
+    expect(problemsOf(deep)[0]).toMatch(/not well-formed|could not be read as XML/)
+  })
+
   it('refuses a DOCTYPE, so entities cannot be expanded', () => {
     const xml = '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "aaaa">]><definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/">&a;</definitions>'
     expect(problemsOf(xml)[0]).toContain('DOCTYPE')

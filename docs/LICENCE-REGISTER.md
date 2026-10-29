@@ -12,33 +12,45 @@ attributions are in [NOTICE](../NOTICE).
 
 | File | Covers | Components |
 |---|---|---|
-| [sbom/frontend.cdx.json](sbom/frontend.cdx.json) | Web portal production dependencies | 27 |
-| [sbom/backend.cdx.json](sbom/backend.cdx.json) | API production dependencies | 129 |
+| [sbom/frontend.cdx.json](sbom/frontend.cdx.json) | Web portal production dependencies (bundled into the page) | 41 |
+| [sbom/backend.cdx.json](sbom/backend.cdx.json) | API production dependencies | 275 |
 
-Both files are CycloneDX 1.5. They are generated from each `package-lock.json`,
-which is exactly what `npm ci` installs in the container images. To regenerate
-them, run:
+Both files are CycloneDX 1.5. They list every package that each
+`package-lock.json` marks as production, which is what `npm ci --omit=dev`
+installs. They also list optional, platform-specific packages; npm installs
+those only on a matching machine, such as the macOS or Windows builds of
+msgpackr-extract. Every package installed in the API image (269 on linux/arm64)
+is in the backend file. To regenerate them, run:
 
 ```bash
 npm run sbom
 ```
 
-The script fails if a component has no licence, or has one outside the
-permissive list: MIT, ISC, Apache-2.0, BSD-2/3-Clause, 0BSD, BlueOak-1.0.0 or
-CC0-1.0.
+The script fails in three cases:
+- A production package in the lockfile is missing from the SBOM.
+- A component has no licence.
+- A component's licence expression is not permissive.
+
+The permissive list is MIT, ISC, Apache-2.0, BSD-2/3-Clause, 0BSD,
+BlueOak-1.0.0, CC0-1.0 and Python-2.0. In an expression, `AND` needs every
+licence to be on the list, and `OR` needs one.
 
 | Licence | Frontend | Backend |
 |---|---|---|
-| MIT | 20 | 88 |
-| ISC | 7 | 22 |
-| Apache-2.0 | 0 | 12 |
-| BSD-3-Clause | 0 | 3 |
-| BSD-2-Clause | 0 | 2 |
-| Checked by hand (metadata has no licence field) | 0 | 2 |
+| MIT | 33 | 215 |
+| ISC | 8 | 32 |
+| Apache-2.0 | 0 | 14 |
+| BSD-3-Clause | 0 | 5 |
+| BSD-2-Clause | 0 | 3 |
+| 0BSD | 0 | 1 |
+| Python-2.0 (PSF licence, permissive; `argparse`) | 0 | 1 |
+| Checked by hand (metadata has no licence field) | 0 | 4 |
 
-The two backend packages checked by hand are both MIT:
-- `passport-strategy@1.0.0`: MIT, per the LICENSE file in the package.
-- `pause@0.0.1`: MIT, per the Readme in the package.
+The four backend packages checked by hand are all MIT:
+- `passport-strategy@1.0.0`: per the LICENSE file in the package.
+- `pause@0.0.1`: per the Readme in the package.
+- `busboy@1.6.0`: per the LICENSE file in the package.
+- `streamsearch@1.1.0`: per the LICENSE file in the package.
 
 ## Container images and services
 
@@ -50,10 +62,15 @@ The two backend packages checked by hand are both MIT:
 | Cache / queue store | `valkey/valkey:8.1-alpine` | Valkey: BSD-3-Clause |
 | Base OS of all images | Alpine Linux | Package licences vary, e.g. musl (MIT) and BusyBox (GPL-2.0). All are used unmodified, with no fee. |
 
-**Valkey replaces Redis.** Redis 7.4 and later is licensed under RSALv2/SSPLv1,
-which is not open source. Valkey is the Linux Foundation fork and speaks the
-same protocol. The compose service is still called `redis`, so configuration
-did not change.
+**Valkey replaces Redis.**
+- Redis 7.4 and the later 7.x releases are under RSALv2/SSPLv1, which is not
+  open source.
+- Redis 8 added AGPLv3 as a third option. AGPLv3 is a copyleft licence with
+  network-use obligations.
+- Valkey is the Linux Foundation fork. It speaks the same protocol and is
+  BSD-3-Clause, with no copyleft or network-use obligations.
+
+The compose service is still called `redis`, so configuration did not change.
 
 ## Fonts
 
@@ -78,6 +95,6 @@ these compose files.
 
 | Component | Why |
 |---|---|
-| `redis:7.4`+ images | RSALv2/SSPLv1 |
+| `redis:7.4`+ images | RSALv2/SSPLv1; Redis 8+ adds an AGPLv3 (copyleft) option |
 | Camunda 8 | Needs a paid production licence |
 | Docker Desktop on servers | Needs a paid subscription at TNeGA's size |

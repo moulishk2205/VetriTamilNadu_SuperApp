@@ -7,21 +7,27 @@ import { apiClient } from '@/lib/api/client'
 import { normalizeError } from '@/lib/api/errors'
 import { schemeKeys } from '@/features/schemes/hooks/useSchemes'
 
-interface SchemeChange { schemeId: string; scheme: string; before: string[]; after: string[] }
+interface SchemeChange { schemeId: string; scheme: string; before: string[]; after: string[]; notInPortal: string[] }
 interface DmnResult { applied: boolean; changes: SchemeChange[]; unchanged: number; notInFile: number }
-interface BpmnResult { conforms: boolean; process: { id: string; name?: string }; tasks: number; flows: number; differences: string[] }
+interface BpmnResult { conforms: boolean; process: { id: string; name?: string }; tasks: number; flows: number; notesCompared: number; differences: string[] }
 
 type Outcome =
   | { kind: 'dmn'; file: string; xml: string; result: DmnResult }
   | { kind: 'bpmn'; file: string; result: BpmnResult }
   | { kind: 'error'; file: string; problems: string[] }
 
-/** The API takes JSON up to 100 kB; keep the file comfortably under it. */
-const MAX_BYTES = 90_000
+/**
+ * The API takes JSON bodies up to 100 kB (102,400 bytes). The file travels
+ * JSON-encoded, where quotes, tabs and line breaks grow, so the encoded size
+ * is what is checked.
+ */
+const MAX_BODY_BYTES = 100_000
+const TOO_LARGE = `The file is too large to upload: the limit is about ${MAX_BODY_BYTES / 1000} kB once encoded.`
 
 /** Every problem the server listed, or its single message. */
 function problemsOf(e: unknown): string[] {
   const err = normalizeError(e)
+  if (err.status === 413) return [TOO_LARGE]
   return err.fieldErrors?._?.length ? err.fieldErrors._ : [err.message]
 }
 
@@ -45,11 +51,12 @@ export function WorkflowImports() {
     const file = e.target.files?.[0]
     e.target.value = '' // so choosing the same file again fires a change
     if (!file) return null
-    if (file.size > MAX_BYTES) {
-      setOutcome({ kind: 'error', file: file.name, problems: [`The file is ${Math.ceil(file.size / 1000)} kB; the limit is ${MAX_BYTES / 1000} kB.`] })
+    const xml = await file.text()
+    if (new Blob([JSON.stringify({ xml })]).size > MAX_BODY_BYTES) {
+      setOutcome({ kind: 'error', file: file.name, problems: [TOO_LARGE] })
       return null
     }
-    return { name: file.name, xml: await file.text() }
+    return { name: file.name, xml }
   }
 
   const run = async (file: string, work: () => Promise<Outcome>) => {
@@ -96,7 +103,7 @@ export function WorkflowImports() {
         <div style={{ flex: 1, minWidth: 220 }}>
           <p style={{ fontSize: 14, fontWeight: 700, color: c.txt }}>Bring edited files back</p>
           <p style={{ fontSize: 12, color: c.txt2, marginTop: 2, lineHeight: 1.45 }}>
-            Edit the exports in any BPMN/DMN modeller. A DMN file updates scheme eligibility after you review the changes. A BPMN file is checked against the running workflow; it is not deployed.
+            Edit the exports in any BPMN/DMN modeller. A DMN file replaces the stored scheme eligibility rules after you review the changes. A BPMN file is checked against the running workflow; it is not deployed.
           </p>
         </div>
         <Btn variant="outline" icon={Upload} disabled={busy} onClick={() => dmnInput.current?.click()}>Import DMN…</Btn>
@@ -129,7 +136,17 @@ export function WorkflowImports() {
           )}
           {outcome.result.changes.length > 0 && (
             <ul style={{ paddingLeft: 18 }}>
-              {outcome.result.changes.map((ch) => row(<><b style={{ color: c.txt }}>{ch.scheme}</b>: {conditions(ch.before)} → {conditions(ch.after)}</>, ch.schemeId))}
+              {outcome.result.changes.map((ch) => row(
+                <>
+                  <b style={{ color: c.txt }}>{ch.scheme}</b>: {conditions(ch.before)} → {conditions(ch.after)}
+                  {ch.notInPortal.length > 0 && (
+                    <span style={{ display: 'block', fontSize: 11.5, color: c.warn }}>
+                      Kept in the rules and the DMN export, but not shown in the portal's eligibility summary: {ch.notInPortal.join(' · ')}
+                    </span>
+                  )}
+                </>,
+                ch.schemeId,
+              ))}
             </ul>
           )}
           {outcome.result.notInFile > 0 && <p style={{ fontSize: 12, color: c.txt3, marginTop: 8 }}>{outcome.result.notInFile} scheme(s) are not in the file and stay as they are.</p>}
@@ -156,6 +173,10 @@ export function WorkflowImports() {
               <ul style={{ paddingLeft: 18 }}>{outcome.result.differences.map((d, i) => row(d, String(i)))}</ul>
             </>
           )}
+          <p style={{ fontSize: 11.5, color: c.txt3, marginTop: 8, lineHeight: 1.5 }}>
+            Compared: the stages, every transition in both directions, and whether each step is done by a person or runs automatically.
+            Actor and SLA notes were compared on {outcome.result.notesCompared} of {outcome.result.tasks} tasks; tasks without a note are not checked for them.
+          </p>
         </div>
       )}
     </Card>

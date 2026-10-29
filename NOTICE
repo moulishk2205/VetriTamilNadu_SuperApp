@@ -31,8 +31,8 @@ Backend (backend/package.json)
 
 Runtime services (docker-compose)
   PostgreSQL 16 .................. PostgreSQL Licence (permissive)
-  Valkey 8.1 ..................... BSD-3-Clause (replaces Redis, whose 7.4+
-                                   releases are RSALv2/SSPL)
+  Valkey 8.1 ..................... BSD-3-Clause (replaces Redis: 7.4+ is
+                                   RSALv2/SSPLv1, and 8+ adds AGPLv3)
   nginx 1.27 (web portal image) .. BSD-2-Clause
 
 The full component list, with licences, is the SBOM in docs/sbom/; see

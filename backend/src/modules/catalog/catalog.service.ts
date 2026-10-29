@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service'
+import { eligibilityOf } from './eligibility'
 
 const pageOf = <T>(items: T[]) => ({ items, total: items.length, page: 0, pageSize: items.length })
 
@@ -45,9 +46,7 @@ export class CatalogService {
       purpose: s.purpose ?? undefined,
       matchScore: s.matchScore,
       color: s.color,
-      eligibility: Object.fromEntries(
-        s.rules.map((r) => [r.field, r.op === 'lte' ? Number(r.value) : r.value]),
-      ),
+      eligibility: eligibilityOf(s.rules),
     }))
     return pageOf(items)
   }

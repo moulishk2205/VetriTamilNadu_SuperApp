@@ -67,5 +67,26 @@
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.19.1",
     "typescript": "^5.5.4"
+  },
+  "jest": {
+    "rootDir": ".",
+    "roots": [
+      "<rootDir>/test/unit"
+    ],
+    "testRegex": "\\.spec\\.ts$",
+    "moduleFileExtensions": [
+      "ts",
+      "js",
+      "json"
+    ],
+    "transform": {
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "<rootDir>/tsconfig.spec.json"
+        }
+      ]
+    },
+    "testEnvironment": "node"
   }
 }

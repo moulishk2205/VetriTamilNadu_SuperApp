@@ -1,5 +1,6 @@
 import { ApplicationStage } from '@prisma/client'
 import { STAGES, TRANSITIONS } from './workflow.engine'
+import { attr, many, parseXml, XmlImportError } from './xml'
 
 /**
  * The live workflow definition (STAGES + TRANSITIONS) as a laid-out process
@@ -157,4 +158,117 @@ export function toBpmnXml(model: ProcessModel): string {
     '</bpmn:definitions>',
     '',
   ].join('\n')
+}
+
+// ─── Import check ────────────────────────────────────────────────────────────
+
+const BPMN_MODEL_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL'
+const TASK_TAGS = ['task', 'userTask', 'serviceTask', 'manualTask', 'scriptTask', 'businessRuleTask', 'sendTask', 'receiveTask']
+/** Elements that change behaviour in ways the running workflow has no counterpart for. */
+const UNSUPPORTED_TAGS = ['callActivity', 'subProcess', 'parallelGateway', 'inclusiveGateway', 'eventBasedGateway', 'complexGateway', 'intermediateThrowEvent', 'intermediateCatchEvent', 'boundaryEvent']
+
+export interface ConformanceReport {
+  conforms: boolean
+  process: { id: string; name?: string }
+  tasks: number
+  flows: number
+  /** Every way the file differs from the running workflow, in plain words. */
+  differences: string[]
+}
+
+/**
+ * Checks an uploaded BPMN 2.0 file, typically our export after editing in a
+ * modeller, against the workflow the engine runs. Tasks are matched to stages
+ * by id, or by label; end events by "Completed" / "Rejected". The engine runs
+ * its built-in definition, so a file can be checked, not deployed: a
+ * difference means the file no longer describes what actually happens.
+ */
+export function checkBpmnConformance(xml: string): ConformanceReport {
+  const defs = parseXml(xml).definitions
+  if (!defs || typeof defs !== 'object' || !xml.includes(BPMN_MODEL_NS)) throw new XmlImportError(['This is not a BPMN 2.0 file (no BPMN <definitions> element)'])
+  const processes = many(defs, 'process')
+  if (processes.length !== 1) throw new XmlImportError([`The file must hold exactly one process (found ${processes.length})`])
+  const proc = processes[0]
+
+  const differences: string[] = []
+  const label = (s: ApplicationStage) => STAGES.find((x) => x.id === s)?.label ?? s
+  const nodes = new Map<string, { tag: string; name: string }>()
+  for (const tag of [...TASK_TAGS, ...UNSUPPORTED_TAGS, 'exclusiveGateway', 'startEvent', 'endEvent']) {
+    for (const el of many(proc, tag)) {
+      const id = attr(el, 'id')
+      if (!id) { differences.push(`A ${tag} has no id`); continue }
+      nodes.set(id, { tag, name: (attr(el, 'name') ?? '').trim() })
+      if (UNSUPPORTED_TAGS.includes(tag)) differences.push(`"${attr(el, 'name') || id}" is a ${tag}, which the running workflow does not have`)
+    }
+  }
+  const flows = many(proc, 'sequenceFlow').map((f) => ({ id: attr(f, 'id') ?? '?', from: attr(f, 'sourceRef') ?? '', to: attr(f, 'targetRef') ?? '' }))
+
+  // Tasks → stages, by id first (as exported), then by label.
+  const stageIds = new Set<string>(Object.values(ApplicationStage))
+  const byLabel = new Map(STAGES.map((s) => [s.label.toLowerCase(), s.id]))
+  const stageOf = new Map<string, ApplicationStage>()
+  const taskFor = new Map<ApplicationStage, string>()
+  for (const [id, n] of nodes) {
+    if (!TASK_TAGS.includes(n.tag)) continue
+    const stage = (stageIds.has(id) ? id : byLabel.get(n.name.toLowerCase())) as ApplicationStage | undefined
+    if (!stage || STAGES.find((s) => s.id === stage)?.terminal) { differences.push(`Task "${n.name || id}" is not a stage of the running workflow`); continue }
+    if (taskFor.has(stage)) { differences.push(`Stage "${label(stage)}" appears more than once`); continue }
+    stageOf.set(id, stage)
+    taskFor.set(stage, id)
+  }
+  const endStage = (id: string): ApplicationStage | undefined => {
+    const name = nodes.get(id)?.name.toLowerCase()
+    if (name === 'completed' || id.startsWith('end_completed')) return ApplicationStage.completed
+    if (name === 'rejected' || id.startsWith('end_rejected')) return ApplicationStage.rejected
+    return undefined
+  }
+  for (const [id, n] of nodes) {
+    if (n.tag === 'endEvent' && !endStage(id)) differences.push(`End event "${n.name || id}" must be named "Completed" or "Rejected"`)
+  }
+  for (const f of flows) {
+    if (!nodes.has(f.from) || !nodes.has(f.to)) differences.push(`Flow ${f.id} connects an element the check does not know ("${f.from}" → "${f.to}")`)
+  }
+
+  /** Stages one step after `id`, passing through exclusive gateways. */
+  const next = (id: string): Set<ApplicationStage> => {
+    const found = new Set<ApplicationStage>()
+    const seen = new Set<string>([id])
+    const walk = (from: string) => {
+      for (const f of flows.filter((x) => x.from === from)) {
+        const n = nodes.get(f.to)
+        if (!n || seen.has(f.to)) continue
+        seen.add(f.to)
+        if (n.tag === 'exclusiveGateway') walk(f.to)
+        else if (n.tag === 'endEvent') { const s = endStage(f.to); if (s) found.add(s) }
+        else if (stageOf.has(f.to)) found.add(stageOf.get(f.to)!)
+      }
+    }
+    walk(id)
+    return found
+  }
+
+  const starts = [...nodes].filter(([, n]) => n.tag === 'startEvent').map(([id]) => id)
+  if (starts.length !== 1) differences.push(`The process must have exactly one start event (found ${starts.length})`)
+  else {
+    const first = [...next(starts[0])]
+    if (first.length !== 1 || first[0] !== ApplicationStage.submitted) differences.push(`The start event must lead to "${label(ApplicationStage.submitted)}" only`)
+  }
+
+  for (const stage of STAGES.filter((s) => !s.terminal)) {
+    const taskId = taskFor.get(stage.id)
+    if (!taskId) { differences.push(`Stage "${stage.label}" has no task`); continue }
+    const actual = next(taskId)
+    const expected = new Set(TRANSITIONS[stage.id])
+    for (const to of expected) if (!actual.has(to)) differences.push(`Missing: "${stage.label}" → "${label(to)}"`)
+    for (const to of actual) if (!expected.has(to)) differences.push(`Not in the running workflow: "${stage.label}" → "${label(to)}"`)
+  }
+
+  const unique = [...new Set(differences)]
+  return {
+    conforms: unique.length === 0,
+    process: { id: attr(proc, 'id') ?? '', name: attr(proc, 'name') },
+    tasks: [...nodes.values()].filter((n) => TASK_TAGS.includes(n.tag)).length,
+    flows: flows.length,
+    differences: unique,
+  }
 }

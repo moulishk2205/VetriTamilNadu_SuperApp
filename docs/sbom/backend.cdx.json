@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:8f7d9eb1-494c-44e4-9e8b-bde5b76e0395",
+  "serialNumber": "urn:uuid:0dc8fc2d-1ac0-427b-82aa-ce9aaf8a1ad7",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-10-28T20:48:05.693Z",
+    "timestamp": "2026-10-29T06:43:06.531Z",
     "lifecycles": [
       {
         "phase": "pre-build"
@@ -1510,6 +1510,34 @@
         {
           "alg": "SHA-512",
           "content": "765d0ef55863bbc22b70b9ddbf6794e2576dd5fb5732aa9f80de07d5ca66195ecfea3781f45c2937d6b673c0cf184d58b3cf2b3542556031eaef708600638f7d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "fast-xml-parser@4.5.7",
+      "type": "library",
+      "name": "fast-xml-parser",
+      "version": "4.5.7",
+      "scope": "required",
+      "purl": "pkg:npm/fast-xml-parser@4.5.7",
+      "properties": [],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/fast-xml-parser/-/fast-xml-parser-4.5.7.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "6ba421d5130235b4ab535fac032000647deb4def8e69625b35922ad12fa27d9722514390b65571049c284d41366d8872b261bf458c88e5624520a7416a125dad"
         }
       ],
       "licenses": [
@@ -3327,6 +3355,34 @@
       ]
     },
     {
+      "bom-ref": "strnum@1.1.2",
+      "type": "library",
+      "name": "strnum",
+      "version": "1.1.2",
+      "scope": "required",
+      "purl": "pkg:npm/strnum@1.1.2",
+      "properties": [],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/strnum/-/strnum-1.1.2.tgz"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "beb37e07b0c12284d36639cf35ec30871e9c040fc7f884bbadf5baf27ed7c42d72eeea2219007168aceab9c19481abd7d797498221b3b4b27cbf1b84cf0a8174"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
       "bom-ref": "swagger-ui-dist@5.17.14",
       "type": "library",
       "name": "swagger-ui-dist",
@@ -3592,6 +3648,7 @@
         "@prisma/client@5.22.0",
         "bcrypt@5.1.1",
         "bullmq@5.79.3",
+        "fast-xml-parser@4.5.7",
         "helmet@7.2.0",
         "ioredis@5.11.1",
         "nestjs-pino@4.6.1",
@@ -3877,6 +3934,12 @@
     {
       "ref": "fast-copy@3.0.2",
       "dependsOn": []
+    },
+    {
+      "ref": "fast-xml-parser@4.5.7",
+      "dependsOn": [
+        "strnum@1.1.2"
+      ]
     },
     {
       "ref": "fs-minipass@2.1.0",
@@ -4266,6 +4329,10 @@
     },
     {
       "ref": "standard-as-callback@2.1.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "strnum@1.1.2",
       "dependsOn": []
     },
     {

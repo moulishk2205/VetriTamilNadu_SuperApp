@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Header, Module, NotFoundException, Param, Patch, Post, Put, Query } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Header, HttpCode, Module, NotFoundException, Param, Patch, Post, Put, Query } from '@nestjs/common'
 import { IsArray, IsBoolean, IsEnum, IsOptional, IsString, Matches, MaxLength } from 'class-validator'
 import { CurrentUser, type JwtUser } from '../../common/decorators/current-user.decorator'
 import { ConfigService } from '@nestjs/config'
@@ -12,6 +12,7 @@ import { buildProcessModel, toBpmnXml } from '../workflow/bpmn'
 import { toDmnXml } from '../workflow/dmn'
 import { WorkflowEngine } from '../workflow/workflow.engine'
 import { SlaService } from './sla.service'
+import { WorkflowImportService } from './workflow-import.service'
 import { WorkingCalendar } from '../workflow/calendar.service'
 
 const OPEN = { notIn: [ApplicationStage.completed, ApplicationStage.rejected] }
@@ -32,6 +33,11 @@ class UpdateUserDto {
   @IsOptional() @IsBoolean() active?: boolean
 }
 
+/** An uploaded BPMN or DMN file, as text. The JSON body limit is 100 kB. */
+class XmlFileDto {
+  @IsString() @MaxLength(95_000) xml!: string
+}
+
 /** Trust Center: the platform's security posture, from live state, including what is not done yet. */
 @ApiTags('admin')
 @Roles('ADMIN')
@@ -45,7 +51,29 @@ export class AdminController {
     private readonly config: ConfigService,
     private readonly perms: PermissionService,
     private readonly calendar: WorkingCalendar,
+    private readonly imports: WorkflowImportService,
   ) {}
+
+  /** What an edited DMN file would change in scheme eligibility. Changes nothing. */
+  @Post('workflows/eligibility/dmn/preview')
+  @HttpCode(200)
+  previewDmn(@Body() dto: XmlFileDto, @CurrentUser() me: JwtUser) {
+    return this.imports.importDmn(dto.xml, false, me)
+  }
+
+  /** Replaces scheme eligibility conditions with those in an edited DMN file. */
+  @Post('workflows/eligibility/dmn/apply')
+  @HttpCode(200)
+  applyDmn(@Body() dto: XmlFileDto, @CurrentUser() me: JwtUser) {
+    return this.imports.importDmn(dto.xml, true, me)
+  }
+
+  /** Checks an edited BPMN file against the workflow the engine runs. */
+  @Post('workflows/gov.standard.v1/bpmn/check')
+  @HttpCode(200)
+  checkBpmn(@Body() dto: XmlFileDto) {
+    return this.imports.checkBpmn(dto.xml)
+  }
 
   @Get('trust')
   async trust() {
@@ -233,5 +261,5 @@ export class WorkflowController {
   }
 }
 
-@Module({ controllers: [AdminController, WorkflowController], providers: [SlaService, WorkflowEngine] })
+@Module({ controllers: [AdminController, WorkflowController], providers: [SlaService, WorkflowEngine, WorkflowImportService] })
 export class AdminModule {}

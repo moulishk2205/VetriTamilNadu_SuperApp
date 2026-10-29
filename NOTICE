@@ -25,6 +25,7 @@ Backend (backend/package.json)
   class-validator, class-transformer MIT
   pino, nestjs-pino .............. MIT
   BullMQ, ioredis ................ MIT
+  fast-xml-parser ................ MIT
   RxJS ........................... Apache-2.0
   Node.js runtime ................ MIT
 

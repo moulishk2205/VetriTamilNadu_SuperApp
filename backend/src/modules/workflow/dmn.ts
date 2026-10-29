@@ -4,7 +4,9 @@
  * rule 1 says "eligible" when every condition holds, rule 2 says "not eligible"
  * otherwise. A scheme with no machine-checkable rule gets a literal
  * "department review", so the export never claims eligibility it cannot check.
+ * `readDmnDecisions` reads such a file back after it was edited in a modeller.
  */
+import { attr, many, parseXml, textOf, XmlImportError } from './xml'
 
 export interface SchemeRules {
   id: string
@@ -15,10 +17,15 @@ export interface SchemeRules {
 
 interface InputVar { name: string; label: string; typeRef: 'number' | 'string' }
 
-/** Known rule fields. Others export under their own (FEEL-safe) name. */
-const FIELDS: Record<string, InputVar> = {
-  incomeMax: { name: 'annualIncome', label: 'Annual income (₹)', typeRef: 'number' },
-}
+const ANNUAL_INCOME: InputVar = { name: 'annualIncome', label: 'Annual income (₹)', typeRef: 'number' }
+
+/**
+ * Known rule fields. `incomeMax` (≤ ceiling, what the catalogue serves as
+ * `eligibility.incomeMax`) and `annualIncome` (any other comparison, written
+ * by a DMN import) are both the applicant's annual income. Other fields export
+ * under their own FEEL-safe name.
+ */
+const FIELDS: Record<string, InputVar> = { incomeMax: ANNUAL_INCOME, annualIncome: ANNUAL_INCOME }
 
 const NUMBER = /^-?\d+(\.\d+)?$/
 
@@ -163,4 +170,150 @@ export function toDmnXml(schemes: SchemeRules[]): string {
     '</definitions>',
     '',
   ].join('\n')
+}
+
+// ─── Import ──────────────────────────────────────────────────────────────────
+
+/** One condition as stored in EligibilityRule. */
+export interface RuleSpec { field: string; op: string; value: string }
+export interface ImportedDecision { id: string; name: string; rules: RuleSpec[] }
+
+const DMN_MODEL_NS = /https?:\/\/www\.omg\.org\/spec\/DMN\/\d{8}\/MODEL\/?/
+const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/
+const STRING = /^"((?:[^"\\]|\\["\\])*)"$/
+
+/** The scheme id an exported decision id carries ("Decision_<schemeId>"). */
+export const schemeIdOf = (decisionId: string) => (decisionId.startsWith('Decision_') ? decisionId.slice('Decision_'.length) : decisionId)
+
+type Literal = { kind: 'number' | 'string'; value: string }
+
+function literalOf(token: string): Literal | null {
+  const t = token.trim()
+  if (NUMBER.test(t)) return { kind: 'number', value: t }
+  const m = STRING.exec(t)
+  return m ? { kind: 'string', value: m[1].replace(/\\(["\\])/g, '$1') } : null
+}
+
+/** Splits "a, b" on commas outside string literals. */
+function splitList(text: string): string[] {
+  const parts: string[] = []
+  let cur = ''
+  let quoted = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '\\' && quoted) { cur += ch + (text[i + 1] ?? ''); i++; continue }
+    if (ch === '"') quoted = !quoted
+    if (ch === ',' && !quoted) { parts.push(cur); cur = '' } else cur += ch
+  }
+  parts.push(cur)
+  return parts
+}
+
+/**
+ * The FEEL unary tests the rule store can hold: a comparison with a number,
+ * a single value, a list of values, or not(value). Anything else is refused
+ * with a reason, rather than stored as something it is not.
+ */
+function parseUnaryTest(text: string, typeRef: string | undefined): { op: string; value: string } | string {
+  const mismatch = (l: Literal) => (typeRef === 'number' || typeRef === 'string') && l.kind !== typeRef
+  const cmp = /^(<=|>=|<|>)\s*(.+)$/.exec(text)
+  if (cmp) {
+    const l = literalOf(cmp[2])
+    if (!l || l.kind !== 'number') return `"${text}": a comparison needs a number`
+    if (mismatch(l)) return `"${text}": the column holds ${typeRef}s`
+    return { op: { '<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt' }[cmp[1]] as string, value: l.value }
+  }
+  const neg = /^not\((.*)\)$/.exec(text)
+  if (neg) {
+    const l = literalOf(neg[1])
+    if (!l) return `"${text}": not() can hold one value only`
+    if (mismatch(l)) return `"${text}": the column holds ${typeRef}s`
+    return { op: 'neq', value: l.value }
+  }
+  const items = splitList(text).map(literalOf)
+  if (items.some((l) => l === null)) {
+    return `"${text}" is not a test VETRI can store (use <, <=, >, >= with a number, a value, a list of values, or not(value))`
+  }
+  const lits = items as Literal[]
+  if (lits.some(mismatch) || new Set(lits.map((l) => l.kind)).size > 1) return `"${text}": the values must all be ${typeRef ?? 'of one type'}`
+  if (lits.length === 1) return { op: 'eq', value: lits[0].value }
+  if (lits.some((l) => l.value.includes(','))) return `"${text}": a listed value cannot contain a comma`
+  return { op: 'in', value: lits.map((l) => l.value).join(',') }
+}
+
+/** The rule-store field for a DMN input: the income ceiling keeps its catalogue name. */
+function fieldFor(input: string, op: string): string {
+  return input === ANNUAL_INCOME.name && op === 'lte' ? 'incomeMax' : input
+}
+
+/** Conditions of one decision table, or the reason it cannot be stored. */
+function readTable(table: Record<string, unknown>, where: string): RuleSpec[] | string {
+  const hit = attr(table, 'hitPolicy') ?? 'UNIQUE'
+  if (hit !== 'FIRST') return `${where}: the hit policy must be FIRST (found ${hit})`
+  if (many(table, 'output').length !== 1) return `${where}: the table needs exactly one output column`
+  const inputs = many(table, 'input').map((i) => ({ name: textOf(i.inputExpression).trim(), typeRef: attr(i.inputExpression, 'typeRef') }))
+  const bad = inputs.find((i) => !VARIABLE.test(i.name))
+  if (bad) return `${where}: input "${bad.name}" must be a plain variable name`
+  for (const i of inputs) {
+    if (i.name === ANNUAL_INCOME.name && i.typeRef !== undefined && i.typeRef !== 'number') return `${where}: ${ANNUAL_INCOME.name} must be a number column`
+  }
+  const rows = many(table, 'rule').map((r) => ({
+    entries: many(r, 'inputEntry').map((e) => textOf(e).trim()),
+    outputs: many(r, 'outputEntry').map((e) => textOf(e).trim()),
+  }))
+  for (const [k, r] of rows.entries()) {
+    if (r.entries.length !== inputs.length || r.outputs.length !== 1) return `${where}: row ${k + 1} does not match the table's columns`
+    if (r.outputs[0] !== '"eligible"' && r.outputs[0] !== '"not eligible"') return `${where}: row ${k + 1} must output "eligible" or "not eligible"`
+  }
+  const eligible = rows.filter((r) => r.outputs[0] === '"eligible"')
+  // The store holds one set of conditions that must all hold (AND). Under FIRST,
+  // that is exactly: the "eligible" row first, then only catch-all rows.
+  if (eligible.length !== 1) return `${where}: VETRI stores one set of conditions per scheme, so the table needs exactly one "eligible" row (found ${eligible.length})`
+  if (rows[0] !== eligible[0]) return `${where}: the "eligible" row must come first`
+  if (rows.slice(1).some((r) => r.entries.some((e) => e !== '-' && e !== ''))) return `${where}: rows after the "eligible" row must match everything ("-")`
+
+  const specs: RuleSpec[] = []
+  for (const [k, input] of inputs.entries()) {
+    const entry = eligible[0].entries[k]
+    if (entry === '-' || entry === '') continue
+    const test = parseUnaryTest(entry, input.name === ANNUAL_INCOME.name ? 'number' : input.typeRef)
+    if (typeof test === 'string') return `${where}, ${input.name}: ${test}`
+    specs.push({ field: fieldFor(input.name, test.op), ...test })
+  }
+  // An unconditional "eligible" is not something the store can say: no rules
+  // means "the department decides", which is what the literal is for.
+  if (specs.length === 0) return `${where}: the "eligible" row has no conditions; to leave the decision to the department, use the literal "department review"`
+  return specs
+}
+
+/**
+ * Reads a DMN file (as exported, after editing in any DMN modeller) back into
+ * eligibility conditions, one entry per decision. Throws XmlImportError with
+ * every problem found, so nothing is half-imported.
+ */
+export function readDmnDecisions(xml: string): ImportedDecision[] {
+  const defs = parseXml(xml).definitions
+  if (!defs || typeof defs !== 'object' || !DMN_MODEL_NS.test(xml)) throw new XmlImportError(['This is not a DMN file (no DMN <definitions> element)'])
+  const problems: string[] = []
+  const decisions: ImportedDecision[] = []
+  for (const d of many(defs, 'decision')) {
+    const id = attr(d, 'id') ?? ''
+    const name = attr(d, 'name') ?? id
+    const where = `Decision "${name}"`
+    if (d.literalExpression !== undefined) {
+      if (textOf(d.literalExpression).trim() === '"department review"') decisions.push({ id, name, rules: [] })
+      else problems.push(`${where}: a literal expression can only be "department review"`)
+      continue
+    }
+    if (!d.decisionTable || typeof d.decisionTable !== 'object') {
+      problems.push(`${where}: has no decision table`)
+      continue
+    }
+    const rules = readTable(d.decisionTable as Record<string, unknown>, where)
+    if (typeof rules === 'string') problems.push(rules)
+    else decisions.push({ id, name, rules })
+  }
+  if (problems.length) throw new XmlImportError(problems)
+  if (decisions.length === 0) throw new XmlImportError(['The file has no decisions'])
+  return decisions
 }

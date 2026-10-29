@@ -12,7 +12,7 @@ services:
     image: cloudflare/cloudflared:2026.10.0
     container_name: vetri-tunnel
     restart: unless-stopped
-    command: ['tunnel', '--no-autoupdate', '--url', 'http://web:8080']
+    command: ['tunnel', '--no-autoupdate', '--protocol', 'http2', '--url', 'http://web:8080']
     depends_on:
       web:
         condition: service_healthy

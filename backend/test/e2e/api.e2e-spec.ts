@@ -133,6 +133,65 @@ describe('Open-standard exports', () => {
   })
 })
 
+describe('Open-standard imports', () => {
+  let admin: string, officer: string
+  beforeAll(async () => {
+    admin = (await demo('admin')).tokens.accessToken
+    officer = (await demo('officer')).tokens.accessToken
+  })
+  const exportDmn = async () => (await call('GET', '/api/workflows/eligibility/dmn', { token: admin })).text
+  const preview = (xml: string, token = admin) => call('POST', '/api/admin/workflows/eligibility/dmn/preview', { token, body: { xml } })
+  const apply = (xml: string) => call('POST', '/api/admin/workflows/eligibility/dmn/apply', { token: admin, body: { xml } })
+
+  it('previews an unedited DMN export as no change', async () => {
+    const r = await preview(await exportDmn())
+    expect(r.status).toBe(200)
+    expect(r.body).toMatchObject({ applied: false, changes: [], notInFile: 0 })
+    expect(r.body.unchanged).toBeGreaterThan(0)
+  })
+
+  it('applies an edited income ceiling, then restores it', async () => {
+    const original = await exportDmn()
+    const ceiling = /&lt;= (\d+)/.exec(original)?.[1]
+    expect(ceiling).toBeDefined()
+    const raised = String(Number(ceiling) + 1)
+    try {
+      const done = await apply(original.replace(`&lt;= ${ceiling}`, `&lt;= ${raised}`))
+      expect(done.status).toBe(200)
+      expect(done.body.applied).toBe(true)
+      expect(done.body.changes).toHaveLength(1)
+      expect(done.body.changes[0].after).toEqual([`incomeMax ≤ ${raised}`])
+      expect(await exportDmn()).toContain(`&lt;= ${raised}`)
+    } finally {
+      expect((await apply(original)).status).toBe(200)
+    }
+    expect((await preview(original)).body.changes).toEqual([])
+  })
+
+  it('refuses a file it cannot store, listing the problems', async () => {
+    const r = await preview((await exportDmn()).replace(/hitPolicy="FIRST"/, 'hitPolicy="COLLECT"'))
+    expect(r.status).toBe(400)
+    expect(r.body.fieldErrors._[0]).toContain('hit policy must be FIRST')
+    const doctype = await preview('<!DOCTYPE x [<!ENTITY a "b">]><x>&a;</x>')
+    expect(doctype.status).toBe(400)
+  })
+
+  it('keeps imports to administrators', async () => {
+    expect((await preview(await exportDmn(), officer)).status).toBe(403)
+  })
+
+  it('checks a BPMN file against the running workflow', async () => {
+    const bpmn = (await call('GET', '/api/workflows/gov.standard.v1/bpmn', { token: admin })).text
+    const same = await call('POST', '/api/admin/workflows/gov.standard.v1/bpmn/check', { token: admin, body: { xml: bpmn } })
+    expect(same.status).toBe(200)
+    expect(same.body).toMatchObject({ conforms: true, differences: [] })
+    const extra = bpmn.replace('  </bpmn:process>', '    <bpmn:sequenceFlow id="flow_x" sourceRef="submitted" targetRef="approval" />\n  </bpmn:process>')
+    const diff = await call('POST', '/api/admin/workflows/gov.standard.v1/bpmn/check', { token: admin, body: { xml: extra } })
+    expect(diff.body.conforms).toBe(false)
+    expect(diff.body.differences).toContain('Not in the running workflow: "Submitted" → "Approval"')
+  })
+})
+
 describe('Certificate verification (public QR check)', () => {
   it('accepts the genuine signature and refuses a forged one', async () => {
     const { tokens } = await demo('citizen')

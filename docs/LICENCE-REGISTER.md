@@ -13,7 +13,7 @@ attributions are in [NOTICE](../NOTICE).
 | File | Covers | Components |
 |---|---|---|
 | [sbom/frontend.cdx.json](sbom/frontend.cdx.json) | Web portal production dependencies | 27 |
-| [sbom/backend.cdx.json](sbom/backend.cdx.json) | API production dependencies | 127 |
+| [sbom/backend.cdx.json](sbom/backend.cdx.json) | API production dependencies | 129 |
 
 Both files are CycloneDX 1.5. They are generated from each `package-lock.json`,
 which is exactly what `npm ci` installs in the container images. To regenerate
@@ -29,7 +29,7 @@ CC0-1.0.
 
 | Licence | Frontend | Backend |
 |---|---|---|
-| MIT | 20 | 86 |
+| MIT | 20 | 88 |
 | ISC | 7 | 22 |
 | Apache-2.0 | 0 | 12 |
 | BSD-3-Clause | 0 | 3 |

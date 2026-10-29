@@ -4,6 +4,7 @@ import { Download, GitBranch } from 'lucide-react'
 import { Card, Btn } from '@/components/ui'
 import { useC } from '@/hooks/useUi'
 import { apiClient } from '@/lib/api/client'
+import { WorkflowImports } from './WorkflowImports'
 
 const Point = z.object({ x: z.number(), y: z.number() })
 const ModelSchema = z.object({
@@ -134,6 +135,7 @@ export function ProcessMap() {
       <p style={{ fontSize: 11.5, color: c.txt3, marginTop: 8, lineHeight: 1.5 }}>
         Steps marked “system” run automatically; the others are performed by officers or the citizen, with the stage SLA in days. × marks a decision. Today the engine executes this definition from code; the BPMN export is the interchange format for moving it onto a standards-based engine.
       </p>
+      <WorkflowImports />
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { useAppNavigation } from '@/hooks/useAppNavigation'
 import { PageHeader, Toolbar, FilterChips, Panel, EmptyState, DeskBtn, StatusChip } from '@/app/desktop/DesktopUI'
 import { useSchemeCards } from '@/features/schemes/hooks/useSchemes'
 import { useAuth } from '@/features/auth/hooks/useAuth'
+import { ForYouPanel } from '@/features/schemes/components/ForYouPanel'
 
 const band = (m: number) => (m >= 85 ? 'High match' : m >= 70 ? 'Likely eligible' : 'Worth checking')
 const bandTone = (m: number) => (m >= 85 ? 'ok' : m >= 70 ? 'warn' : 'info') as 'ok' | 'warn' | 'info'
@@ -55,6 +56,8 @@ export default function DesktopSchemes() {
         subtitle={`Government of Tamil Nadu schemes ranked against ${citizen?.fullName ? `${citizen.fullName}’s` : 'your'} citizen profile — district, income band and verified documents. Scheme details and budgets are illustrative until verified against the Government Order.`}
         actions={compare.length > 0 ? <DeskBtn icon={Scale} onClick={() => setCompare([])}>Clear comparison ({compare.length})</DeskBtn> : undefined}
       />
+
+      <ForYouPanel />
 
       <Toolbar query={q} onQuery={setQ} placeholder="Search schemes by name or benefit…">
         <FilterChips options={departments} value={dept} onChange={setDept} />

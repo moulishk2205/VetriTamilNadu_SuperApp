@@ -26,6 +26,7 @@ import { SearchModule } from './modules/search/search.module'
 import { AiModule } from './modules/ai/ai.module'
 import { HealthModule } from './modules/health/health.module'
 import { AdminModule } from './modules/admin/admin.controller'
+import { EligibilityModule } from './modules/eligibility/eligibility.controller'
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { AdminModule } from './modules/admin/admin.controller'
     AiModule,
     HealthModule,
     AdminModule,
+    EligibilityModule,
   ],
   providers: [
     // Order matters: throttle → authenticate → authorize.

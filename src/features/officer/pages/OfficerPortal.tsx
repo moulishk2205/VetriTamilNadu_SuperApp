@@ -5,6 +5,7 @@ import { useC } from '@/hooks/useUi'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { useOfficerQueue, useOfficerStats } from '../hooks/useOfficer'
 import { OfficerGrievances } from '../components/OfficerGrievances'
+import { RuleTester } from '@/features/admin/components/RuleTester'
 import { OfficerReportRequests } from '../components/OfficerReportRequests'
 
 /**
@@ -98,6 +99,8 @@ export default function OfficerPortal() {
         <OfficerReportRequests />
 
         <OfficerGrievances />
+
+        <RuleTester collapsible />
 
         <p style={{ fontSize: 12, fontWeight: 700, color: c.txt3, letterSpacing: 0.5, textTransform: 'uppercase', margin: '18px 0 10px' }}>Daily Performance</p>
         <Card style={{ padding: 0 }}>

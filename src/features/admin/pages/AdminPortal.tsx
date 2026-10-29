@@ -18,13 +18,14 @@ import { STANDARD_GOV_WORKFLOW } from '@/lib/workflow/definitions'
 import { StatTile } from '@/components/charts'
 import { TrustCenter } from '@/features/admin/components/TrustCenter'
 import { ProcessMap } from '@/features/admin/components/ProcessMap'
+import { RuleTester } from '@/features/admin/components/RuleTester'
 import { UserAdmin } from '@/features/admin/components/UserAdmin'
 import { PermissionMatrix } from '@/features/admin/components/PermissionMatrix'
 import { HolidayCalendar } from '@/features/admin/components/HolidayCalendar'
 
 const AuditSchema = z.object({ items: z.array(z.object({ id: z.string(), actor: z.string(), action: z.string(), entity: z.string(), entityId: z.string(), at: z.string(), note: z.string().optional() })), total: z.number() })
 
-const TABS = ['Overview', 'Trust Center', 'Process model', 'Users & roles', 'Permissions', 'Holidays', 'Manage', 'Flags', 'Broadcast', 'Logs', 'Audit'] as const
+const TABS = ['Overview', 'Trust Center', 'Process model', 'Eligibility', 'Users & roles', 'Permissions', 'Holidays', 'Manage', 'Flags', 'Broadcast', 'Logs', 'Audit'] as const
 
 /** Super Admin Portal — platform administration over the real registries. */
 export default function AdminPortal() {
@@ -119,6 +120,7 @@ export default function AdminPortal() {
         {tab === 'Trust Center' && <TrustCenter />}
 
         {tab === 'Process model' && <ProcessMap />}
+        {tab === 'Eligibility' && <RuleTester />}
 
         {tab === 'Users & roles' && <UserAdmin />}
 

@@ -197,6 +197,10 @@ model Citizen {
   notifications Notification[]
   timeline     TimelineEvent[]
   conversations Conversation[]
+  schemeClaims SchemeClaim[]
+  /// Facts the citizen declared for scheme eligibility (annual income, land
+  /// holding), with when. Declared, not verified: the department verifies a claim.
+  facts        Json?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
@@ -526,6 +530,7 @@ model Scheme {
   matchScore Int               @default(0)
   color      String
   rules      EligibilityRule[]
+  claims     SchemeClaim[]
   createdAt  DateTime          @default(now())
 }
 
@@ -625,4 +630,28 @@ model SupportTicket {
   status    String   @default("open")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─── Scheme claims ("No Application" delivery) ────────────────────────────────
+enum ClaimStatus {
+  submitted
+  approved
+  rejected
+}
+
+/// A citizen's one-tap claim on a scheme whose recorded conditions they meet.
+model SchemeClaim {
+  id        String      @id @default(uuid())
+  citizen   Citizen     @relation(fields: [citizenId], references: [id])
+  citizenId String
+  scheme    Scheme      @relation(fields: [schemeId], references: [id])
+  schemeId  String
+  status    ClaimStatus @default(submitted)
+  /// The facts and per-condition results the claim was made on.
+  basis     Json
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([citizenId, schemeId])
+  @@index([schemeId, status])
 }

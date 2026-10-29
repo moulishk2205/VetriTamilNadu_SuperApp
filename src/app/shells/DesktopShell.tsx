@@ -5,6 +5,7 @@ import { HomeBar } from '@/app/desktop/HomeBar'
 import { HOME_CSS } from '@/features/home/homeCss'
 import { DesktopFooter } from '@/app/desktop/DesktopFooter'
 import { desktopCss } from '@/app/desktop/desktopCss'
+import { LiveAlerts } from '@/app/desktop/LiveAlerts'
 
 /** Pre-login routes render without portal chrome — they own the full viewport. */
 const AUTH_PATHS = new Set(['/', '/onboarding', '/login', '/demo'])
@@ -61,6 +62,7 @@ function PortalChrome({ children }: { children: ReactNode }) {
       <HomeBar />
       <main className={home ? 'vh-main' : 'vh-main vh-page'}>{children}</main>
       <DesktopFooter />
+      <LiveAlerts />
     </div>
   )
 }

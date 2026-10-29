@@ -4,6 +4,7 @@ import { Download, GitBranch } from 'lucide-react'
 import { Card, Btn } from '@/components/ui'
 import { useC } from '@/hooks/useUi'
 import { apiClient } from '@/lib/api/client'
+import { LIVE } from '@/lib/api/live'
 import { WorkflowImports } from './WorkflowImports'
 
 const Point = z.object({ x: z.number(), y: z.number() })
@@ -38,7 +39,7 @@ function lines(label: string): string[] {
  */
 export function ProcessMap() {
   const c = useC()
-  const { data, isLoading } = useQuery({ queryKey: ['admin', 'workflow-model'], queryFn: () => apiClient.get('/workflows/gov.standard.v1/model', { schema: ModelSchema }) })
+  const { data, isLoading } = useQuery({ queryKey: ['admin', 'workflow-model'], queryFn: () => apiClient.get('/workflows/gov.standard.v1/model', { schema: ModelSchema }), ...LIVE })
 
   const download = async (path: string, filename: string) => {
     const xml = await apiClient.get<string>(path)

@@ -168,7 +168,7 @@ describe('Open-standard imports', () => {
       expect(done.status).toBe(200)
       expect(done.body.applied).toBe(true)
       expect(done.body.changes).toHaveLength(1)
-      expect(done.body.changes[0].after).toEqual([`incomeMax ≤ ${raised}`])
+      expect(done.body.changes[0].after).toContain(`incomeMax ≤ ${raised}`)
       expect(await exportDmn()).toContain(`&lt;= ${raised}`)
     } finally {
       expect((await apply(original)).status).toBe(200)

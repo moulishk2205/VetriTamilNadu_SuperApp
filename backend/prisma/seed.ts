@@ -2,6 +2,7 @@
 import {
   ApplicationStage, ComplaintStatus, PrismaClient, Priority, VerificationStatus,
 } from '@prisma/client'
+import { SCHEMES } from './schemes'
 
 const prisma = new PrismaClient()
 
@@ -61,29 +62,8 @@ const SERVICES = [
   { slug: 'svc_hospital', code: 'HL-APPT', name: 'Hospital Appointment', cat: 'health', dept: 'Health & Family Welfare', fee: 'Free', time: 'Same day', validity: 'NA', produces: null, icon: 'HeartPulse', popular: false },
 ]
 
-// CANONICAL 2026 welfare catalogue — mirrors
-// src/features/schemes/catalog/schemes2026.ts (separate package, cannot import
-// from the frontend). This is the ONLY scheme data seeded: no padding, no
-// generated placeholders. Keep both files in sync.
-const SCHEMES = [
-  { name: 'PM Kisan Samman Nidhi', nameTamil: '\u0baa\u0bbf\u0bb0\u0ba4\u0bae \u0bae\u0ba8\u0bcd\u0ba4\u0bbf\u0bb0\u0bbf \u0b95\u0bbf\u0b9a\u0bbe\u0ba9\u0bcd \u0b9a\u0bae\u0bcd\u0bae\u0bbe\u0ba9\u0bcd \u0ba8\u0bbf\u0ba4\u0bbf', dept: 'Agriculture', benefit: '\u20b96,000 per year', benefitTamil: '\u0b86\u0ba3\u0bcd\u0b9f\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u20b96,000', budget: null, score: 95, color: '#0F766E', incomeMax: 300000, purpose: 'Income support for land-holding farmer families (Government of India).' },
-  { name: 'Annanin Seer Scheme', nameTamil: '\u0b85\u0ba3\u0bcd\u0ba3\u0ba9\u0bbf\u0ba9\u0bcd \u0b9a\u0bc0\u0bb0\u0bcd \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Social Welfare & Women Empowerment', benefit: '8 g gold coin + silk saree', benefitTamil: '8 \u0b95\u0bbf\u0bb0\u0bbe\u0bae\u0bcd \u0ba4\u0b99\u0bcd\u0b95 \u0ba8\u0bbe\u0ba3\u0baf\u0bae\u0bcd + \u0baa\u0b9f\u0bcd\u0b9f\u0bc1\u0baa\u0bcd \u0baa\u0bc1\u0b9f\u0bb5\u0bc8', budget: '\u20b9812 Crore', score: 92, color: '#DB2777', incomeMax: 250000, purpose: 'Marriage assistance for eligible brides.' },
-  { name: 'Thai Maaman Thanga Modhiram Scheme', nameTamil: '\u0ba4\u0bbe\u0baf\u0bcd \u0bae\u0bbe\u0bae\u0ba9\u0bcd \u0ba4\u0b99\u0bcd\u0b95 \u0bae\u0bcb\u0ba4\u0bbf\u0bb0\u0bae\u0bcd \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Health & Family Welfare', benefit: '1 g gold ring for every baby born in a Government hospital', benefitTamil: '\u0b85\u0bb0\u0b9a\u0bc1 \u0bae\u0bb0\u0bc1\u0ba4\u0bcd\u0ba4\u0bc1\u0bb5\u0bae\u0ba9\u0bc8\u0baf\u0bbf\u0bb2\u0bcd \u0baa\u0bbf\u0bb1\u0b95\u0bcd\u0b95\u0bc1\u0bae\u0bcd \u0b92\u0bb5\u0bcd\u0bb5\u0bc6\u0bbe\u0bb0\u0bc1 \u0b95\u0bc1\u0bb4\u0ba8\u0bcd\u0ba4\u0bc8\u0b95\u0bcd\u0b95\u0bc1\u0bae\u0bcd 1 \u0b95\u0bbf\u0bb0\u0bbe\u0bae\u0bcd \u0ba4\u0b99\u0bcd\u0b95 \u0bae\u0bcb\u0ba4\u0bbf\u0bb0\u0bae\u0bcd', budget: '\u20b9560 Crore', score: 88, color: '#F59E0B', incomeMax: 0, purpose: 'Every baby born in a Government hospital receives a 1 gram gold ring.' },
-  { name: 'Vetri Laptop Scheme', nameTamil: '\u0bb5\u0bc6\u0bb1\u0bcd\u0bb1\u0bbf \u0bae\u0b9f\u0bbf\u0b95\u0bcd\u0b95\u0ba3\u0bbf\u0ba9\u0bbf \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Higher Education', benefit: 'Free laptop for college students', benefitTamil: '\u0b95\u0bb2\u0bcd\u0bb2\u0bc2\u0bb0\u0bbf \u0bae\u0bbe\u0ba3\u0bb5\u0bb0\u0bcd\u0b95\u0bb3\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u0b87\u0bb2\u0bb5\u0b9a \u0bae\u0b9f\u0bbf\u0b95\u0bcd\u0b95\u0ba3\u0bbf\u0ba9\u0bbf', budget: '\u20b92,000 Crore', score: 85, color: '#7C3AED', incomeMax: 0, purpose: 'Free laptops for college students.' },
-  { name: 'Modern Bicycle Scheme', nameTamil: '\u0ba8\u0bb5\u0bc0\u0ba9 \u0bae\u0bbf\u0ba4\u0bbf\u0bb5\u0ba3\u0bcd\u0b9f\u0bbf \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'School Education', benefit: 'Branded bicycle with helmet and bottle holder', benefitTamil: '\u0ba4\u0bb2\u0bc8\u0b95\u0bcd\u0b95\u0bb5\u0b9a\u0bae\u0bcd \u0bae\u0bb1\u0bcd\u0bb1\u0bc1\u0bae\u0bcd \u0b95\u0bc1\u0b9f\u0bc1\u0bb5\u0bc8 \u0bb5\u0bc8\u0baa\u0bcd\u0baa\u0bbe\u0ba9\u0bc1\u0b9f\u0ba9\u0bcd \u0ba8\u0bb5\u0bc0\u0ba9 \u0bae\u0bbf\u0ba4\u0bbf\u0bb5\u0ba3\u0bcd\u0b9f\u0bbf', budget: '\u20b9777 Crore', score: 80, color: '#0891B2', incomeMax: 0, purpose: 'Free branded bicycles with helmet and bottle holder for eligible students.' },
-  { name: 'Vetri Skill Training Scheme', nameTamil: '\u0bb5\u0bc6\u0bb1\u0bcd\u0bb1\u0bbf \u0ba4\u0bbf\u0bb1\u0ba9\u0bcd \u0baa\u0baf\u0bbf\u0bb1\u0bcd\u0b9a\u0bbf \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Labour Welfare & Skill Development', benefit: 'Industry skill training, internships and AI upskilling', benefitTamil: '\u0ba4\u0bc6\u0bbe\u0bb4\u0bbf\u0bb2\u0bcd\u0ba4\u0bc1\u0bb1\u0bc8 \u0ba4\u0bbf\u0bb1\u0ba9\u0bcd \u0baa\u0baf\u0bbf\u0bb1\u0bcd\u0b9a\u0bbf \u0bae\u0bb1\u0bcd\u0bb1\u0bc1\u0bae\u0bcd AI \u0ba4\u0bbf\u0bb1\u0ba9\u0bcd \u0bae\u0bc7\u0bae\u0bcd\u0baa\u0bbe\u0b9f\u0bc1', budget: null, score: 78, color: '#2563EB', incomeMax: 0, purpose: 'Industry-oriented skill development, internships and AI skill training - target: 5 lakh youth trained in AI by 2031.' },
-  { name: 'Vetri Housing Scheme', nameTamil: '\u0bb5\u0bc6\u0bb1\u0bcd\u0bb1\u0bbf \u0bb5\u0bc0\u0b9f\u0bcd\u0b9f\u0bc1\u0bb5\u0b9a\u0ba4\u0bbf \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Housing & Urban Development', benefit: 'Housing assistance for eligible families', benefitTamil: '\u0ba4\u0b95\u0bc1\u0ba4\u0bbf\u0baf\u0bbe\u0ba9 \u0b95\u0bc1\u0b9f\u0bc1\u0bae\u0bcd\u0baa\u0b99\u0bcd\u0b95\u0bb3\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u0bb5\u0bc0\u0b9f\u0bcd\u0b9f\u0bc1\u0bb5\u0b9a\u0ba4\u0bbf \u0b89\u0ba4\u0bb5\u0bbf', budget: null, score: 74, color: '#059669', incomeMax: 300000, purpose: 'Housing assistance for eligible families.' },
-  { name: "Vetri Women's Goat Rearing Scheme", nameTamil: '\u0bb5\u0bc6\u0bb1\u0bcd\u0bb1\u0bbf \u0bae\u0b95\u0bb3\u0bbf\u0bb0\u0bcd \u0b86\u0b9f\u0bc1 \u0bb5\u0bb3\u0bb0\u0bcd\u0baa\u0bcd\u0baa\u0bc1 \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'Animal Husbandry', benefit: 'Goat rearing support for women', benefitTamil: '\u0bae\u0b95\u0bb3\u0bbf\u0bb0\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u0b86\u0b9f\u0bc1 \u0bb5\u0bb3\u0bb0\u0bcd\u0baa\u0bcd\u0baa\u0bc1 \u0b89\u0ba4\u0bb5\u0bbf', budget: null, score: 70, color: '#16A34A', incomeMax: 200000, purpose: 'Livelihood support for women through goat rearing.' },
-  { name: 'Digital Library Initiative', nameTamil: '\u0b9f\u0bbf\u0b9c\u0bbf\u0b9f\u0bcd\u0b9f\u0bb2\u0bcd \u0ba8\u0bc2\u0bb2\u0b95\u0ba4\u0bcd \u0ba4\u0bbf\u0b9f\u0bcd\u0b9f\u0bae\u0bcd', dept: 'School Education', benefit: 'Free digital library access for students', benefitTamil: '\u0bae\u0bbe\u0ba3\u0bb5\u0bb0\u0bcd\u0b95\u0bb3\u0bc1\u0b95\u0bcd\u0b95\u0bc1 \u0b87\u0bb2\u0bb5\u0b9a \u0b9f\u0bbf\u0b9c\u0bbf\u0b9f\u0bcd\u0b9f\u0bb2\u0bcd \u0ba8\u0bc2\u0bb2\u0b95 \u0b85\u0ba3\u0bc1\u0b95\u0bb2\u0bcd', budget: null, score: 66, color: '#8B5CF6', incomeMax: 0, purpose: 'Digital library access for students across Tamil Nadu.' },
-]
-
-// Conditions each scheme's own purpose line states (land-holding farmers,
-// brides, women), so the eligibility engine does not offer them to anyone else.
-const EXTRA_RULES: Record<string, { field: string; op: string; value: string }[]> = {
-  'PM Kisan Samman Nidhi': [{ field: 'landHolder', op: 'eq', value: 'yes' }],
-  'Annanin Seer Scheme': [{ field: 'gender', op: 'eq', value: 'Female' }],
-  "Vetri Women's Goat Rearing Scheme": [{ field: 'gender', op: 'eq', value: 'Female' }],
-}
+// The welfare catalogue (with sourced conditions) lives in ./schemes.ts, shared
+// with sync-schemes.ts so a running database can be brought up to date.
 
 const FIRST = ['Arun', 'Priya', 'Karthik', 'Divya', 'Suresh', 'Lakshmi', 'Vijay', 'Meena', 'Rajesh', 'Anitha', 'Bala', 'Kavya', 'Senthil', 'Deepa', 'Ganesh', 'Revathi', 'Muthu', 'Nithya', 'Ramesh', 'Shanthi']
 const LAST = ['Kumar', 'Raj', 'Murugan', 'Krishnan', 'Sundaram', 'Palani', 'Natarajan', 'Selvam', 'Ramachandran', 'Subramaniam']
@@ -186,18 +166,15 @@ async function main() {
 
   /* schemes --------------------------------------------------------------- */
   for (const base of SCHEMES) {
-    const scheme = await prisma.scheme.create({
+    await prisma.scheme.create({
       data: {
-        name: base.name, nameTamil: base.nameTamil, department: base.dept,
-        benefit: base.benefit, benefitTamil: base.benefitTamil,
-        budget: base.budget ?? undefined, purpose: base.purpose,
-        matchScore: base.score, color: base.color,
+        name: base.name, nameTamil: base.nameTamil, department: base.dept, benefit: base.benefit,
+        budget: base.budget, purpose: base.purpose, matchScore: base.score, color: base.color,
+        rules: { create: base.rules },
       },
     })
-    if (base.incomeMax) await prisma.eligibilityRule.create({ data: { schemeId: scheme.id, field: 'incomeMax', op: 'lte', value: String(base.incomeMax) } })
-    for (const r of EXTRA_RULES[base.name] ?? []) await prisma.eligibilityRule.create({ data: { schemeId: scheme.id, ...r } })
   }
-  console.log(`  \u2713 ${SCHEMES.length} welfare schemes (2026 catalogue, no placeholders)`)
+  console.log(`  \u2713 ${SCHEMES.length} welfare schemes (2026-27 catalogue, sourced conditions)`)
 
   /* demo citizen (frontend persona — MUST be first) ----------------------- */
   const demo = await prisma.citizen.create({
@@ -225,7 +202,7 @@ async function main() {
     data: [
       { citizenId: demo.id, title: 'Birth Certificate Approved', body: 'Your application APP-2026-BC-1123 has been approved. Download from wallet.', category: 'application', priority: 'HIGH', read: false, actionPath: '/wallet', icon: 'CheckCircle', color: 'ok', createdAt: daysAgo(0) },
       { citizenId: demo.id, title: 'Complaint Assigned', body: 'CMP-TN-000452 assigned to GCC Zone 9 officer.', category: 'complaint', priority: 'MEDIUM', read: false, actionPath: '/tracker', icon: 'AlertTriangle', color: 'warn', createdAt: daysAgo(0) },
-      { citizenId: demo.id, title: 'New Welfare Scheme Available', body: 'Annanin Seer Scheme - you may be eligible for an 8 g gold coin and silk saree.', category: 'scheme', priority: 'MEDIUM', read: true, actionPath: '/schemes', icon: 'Sparkles', color: 'info', createdAt: daysAgo(1) },
+      { citizenId: demo.id, title: 'New welfare schemes announced', body: 'The 2026-27 budget adds new schemes. Open Schemes to see which ones you qualify for.', category: 'scheme', priority: 'MEDIUM', read: true, actionPath: '/schemes', icon: 'Sparkles', color: 'info', createdAt: daysAgo(1) },
       { citizenId: demo.id, title: 'Service Deadline Tomorrow', body: 'Income Certificate APP-2026-IC-44821 deadline is June 21.', category: 'reminder', priority: 'HIGH', read: true, actionPath: '/tracker', icon: 'Clock', color: 'err', createdAt: daysAgo(1) },
       { citizenId: demo.id, title: 'Document Verified', body: 'Your Community Certificate has been verified by DigiLocker.', category: 'document', priority: 'MEDIUM', read: true, actionPath: '/wallet', icon: 'FileCheck', color: 'ok', createdAt: daysAgo(3) },
       { citizenId: demo.id, title: 'Rate Your Experience', body: 'How was your experience with the Birth Certificate service?', category: 'system', priority: 'LOW', read: true, icon: 'Star', color: 'sec', createdAt: daysAgo(5) },

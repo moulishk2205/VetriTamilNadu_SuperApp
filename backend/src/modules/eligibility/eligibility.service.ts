@@ -7,8 +7,9 @@ import { readDmnDecisions, schemeIdOf, type RuleSpec } from '../workflow/dmn'
 import { XmlImportError } from '../workflow/xml'
 import { ageFrom, evaluate, type Facts } from './eligibility.engine'
 
-/** What the citizen declared; stored on Citizen.facts. */
-export interface DeclaredFacts { annualIncome?: number; landHolder?: 'yes' | 'no'; declaredAt?: string }
+/** Facts a citizen may declare (validated in FactsDto); stored on Citizen.facts. */
+export const DECLARABLE = ['annualIncome', 'landHolder', 'community', 'area', 'kutchaHut', 'studentLevel', 'schoolType', 'occupation', 'specialCategory'] as const
+export type DeclaredFacts = Partial<Record<(typeof DECLARABLE)[number], string | number>> & { declaredAt?: string }
 
 type SchemeRow = Prisma.SchemeGetPayload<{ include: { rules: true } }>
 
@@ -37,8 +38,7 @@ export class EligibilityService {
     if (!c) throw new NotFoundException('Citizen not found')
     const declared = (c.facts ?? {}) as DeclaredFacts
     const facts: Facts = { gender: c.gender, district: c.district, age: ageFrom(c.dob) }
-    if (declared.annualIncome !== undefined) facts.annualIncome = declared.annualIncome
-    if (declared.landHolder !== undefined) facts.landHolder = declared.landHolder
+    for (const k of DECLARABLE) if (declared[k] !== undefined) facts[k] = declared[k]
     return { facts, declared }
   }
 
@@ -62,8 +62,7 @@ export class EligibilityService {
     const before = await this.forCitizen(citizenId)
     const { declared } = await this.factsOf(citizenId)
     const next: DeclaredFacts = { ...declared, declaredAt: new Date().toISOString() }
-    if (input.annualIncome !== undefined) next.annualIncome = input.annualIncome
-    if (input.landHolder !== undefined) next.landHolder = input.landHolder
+    for (const k of DECLARABLE) if (input[k] !== undefined) next[k] = input[k]
     await this.prisma.citizen.update({ where: { id: citizenId }, data: { facts: next as Prisma.InputJsonValue } })
 
     const after = await this.forCitizen(citizenId)

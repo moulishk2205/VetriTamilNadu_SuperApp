@@ -7,9 +7,24 @@ import { Roles } from '../../common/decorators/roles.decorator'
 import { EligibilityService } from './eligibility.service'
 
 /** Declared before the controller: decorator metadata reads them at class definition. */
+const YES_NO = ['yes', 'no']
+const COMMUNITY = ['SC', 'ST', 'BC', 'MBC', 'DNC', 'OC']
+const AREA = ['rural', 'urban']
+const STUDENT = ['none', 'class-1-5', 'class-6-8', 'class-9-10', 'class-11', 'class-12', 'college']
+const SCHOOL = ['government', 'aided', 'private']
+const OCCUPATION = ['farmer', 'agricultural-labourer', 'traditional-fisher', 'other']
+const CATEGORY = ['none', 'destitute-widow', 'deserted-woman', 'transgender', 'disabled']
+
 class FactsDto {
   @IsOptional() @IsInt() @Min(0) @Max(1_000_000_000) annualIncome?: number
-  @IsOptional() @IsIn(['yes', 'no']) landHolder?: 'yes' | 'no'
+  @IsOptional() @IsIn(YES_NO) landHolder?: string
+  @IsOptional() @IsIn(COMMUNITY) community?: string
+  @IsOptional() @IsIn(AREA) area?: string
+  @IsOptional() @IsIn(YES_NO) kutchaHut?: string
+  @IsOptional() @IsIn(STUDENT) studentLevel?: string
+  @IsOptional() @IsIn(SCHOOL) schoolType?: string
+  @IsOptional() @IsIn(OCCUPATION) occupation?: string
+  @IsOptional() @IsIn(CATEGORY) specialCategory?: string
 }
 
 class SampleProfileDto {
@@ -17,8 +32,14 @@ class SampleProfileDto {
   @IsOptional() @IsString() @MaxLength(20) gender?: string
   @IsOptional() @IsString() @MaxLength(60) district?: string
   @IsOptional() @IsInt() @Min(0) @Max(1_000_000_000) annualIncome?: number
-  @IsOptional() @IsIn(['yes', 'no']) landHolder?: 'yes' | 'no'
-  @IsOptional() @IsString() @MaxLength(40) community?: string
+  @IsOptional() @IsIn(YES_NO) landHolder?: string
+  @IsOptional() @IsIn(COMMUNITY) community?: string
+  @IsOptional() @IsIn(AREA) area?: string
+  @IsOptional() @IsIn(YES_NO) kutchaHut?: string
+  @IsOptional() @IsIn(STUDENT) studentLevel?: string
+  @IsOptional() @IsIn(SCHOOL) schoolType?: string
+  @IsOptional() @IsIn(OCCUPATION) occupation?: string
+  @IsOptional() @IsIn(CATEGORY) specialCategory?: string
 }
 
 class SimulateDto {

@@ -9,7 +9,7 @@ describe('eligibility engine', () => {
     expect(e.verdict).toBe('eligible')
     expect(e.conditions.map((c) => [c.text, c.met])).toEqual([
       ['Annual income (₹) ≤ 3,00,000', true],
-      ['Owns agricultural land is yes', true],
+      ['Owns agricultural land', true],
     ])
   })
 

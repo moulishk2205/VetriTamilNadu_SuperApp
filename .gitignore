@@ -82,3 +82,6 @@ motion-studio/out/
 *.[mM][tT][sS]
 *.[mM]2[tT][sS]
 *.3[gG][pP]
+
+# Example settings files are meant to be committed
+!.env.example

@@ -40,13 +40,13 @@ const FACT_OF: Record<string, FactKey> = {
 
 export const FACT_LABELS: Record<string, string> = {
   annualIncome: 'Annual income (₹)', age: 'Age', gender: 'Gender', district: 'District',
-  landHolder: 'Owns agricultural land', community: 'Community', area: 'Lives in', kutchaHut: 'Lives in a kutcha hut',
+  landHolder: 'Owns agricultural land', community: 'Community', area: 'Area', kutchaHut: 'Lives in a kutcha hut',
   studentLevel: 'Studying', schoolType: 'School', occupation: 'Occupation', specialCategory: 'Category',
 }
 
 /** Readable names for the fixed value ids rules use. */
 export const VALUE_LABELS: Record<string, string> = {
-  rural: 'a rural area', urban: 'an urban area', 'class-1-5': 'Classes I-V', 'class-6-8': 'Classes VI-VIII',
+  rural: 'rural', urban: 'urban', 'class-1-5': 'Classes I-V', 'class-6-8': 'Classes VI-VIII',
   'class-9-10': 'Classes IX-X', 'class-11': 'Class XI', 'class-12': 'Class XII', college: 'college', none: 'none',
   government: 'Government school', aided: 'Government-aided school', private: 'private school',
   farmer: 'farmer', 'agricultural-labourer': 'agricultural labourer', 'traditional-fisher': 'traditional fisher', other: 'other',
@@ -89,7 +89,10 @@ export function evaluate(rules: Rule[], facts: Facts): Evaluation {
     const shown = r.op === 'in' ? r.value.split(',').map((v) => show(fact, v)).join(', ') : show(fact, r.value)
     const actual = (facts as Record<string, string | number | undefined>)[fact]
     const known = actual !== undefined && actual !== null && String(actual).trim() !== ''
-    return { text: `${label} ${SYMBOL[r.op] ?? r.op} ${shown}`, fact, actual: known ? actual : undefined, met: known ? test(r.op, actual, r.value) : null }
+    // Yes/no facts read as a statement: "Owns agricultural land", "Not: Lives in a kutcha hut".
+    const yesNo = r.op === 'eq' && (r.value === 'yes' || r.value === 'no')
+    const text = yesNo ? (r.value === 'yes' ? label : `Not: ${label}`) : `${label} ${SYMBOL[r.op] ?? r.op} ${shown}`
+    return { text, fact, actual: known ? actual : undefined, met: known ? test(r.op, actual, r.value) : null }
   })
   const missing = [...new Set(conditions.filter((c) => c.met === null).map((c) => c.fact))]
   const verdict: Verdict = conditions.some((c) => c.met === false) ? 'not_eligible' : missing.length ? 'needs_info' : 'eligible'

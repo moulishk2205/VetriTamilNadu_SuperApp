@@ -360,6 +360,8 @@ model Application {
   makerOfficerId String?
   /// When the "decision due soon" reminder went out (once per application).
   slaRemindedAt  DateTime?
+  /// Current level within the service's approval chain (1-based) while at the approval stage.
+  approvalLevel  Int              @default(1)
   fields         Json             @default("{}")
   documents      Json             @default("[]")
   timeline       TimelineEvent[]
@@ -390,6 +392,31 @@ model TimelineEvent {
   at            DateTime     @default(now())
 
   @@index([citizenId])
+}
+
+/// Configurable approval chain: 1–10 sequential levels per service, each
+/// approved by an officer holding the named post (designation).
+model ApprovalLevel {
+  id          String @id @default(uuid())
+  serviceSlug String
+  level       Int
+  title       String
+  designation String
+
+  @@unique([serviceSlug, level])
+}
+
+/// History of approval-chain decisions on an application.
+model ApprovalAction {
+  id            String   @id @default(uuid())
+  applicationId String
+  level         Int
+  officerId     String
+  decision      String // approved | returned
+  note          String?
+  at            DateTime @default(now())
+
+  @@index([applicationId])
 }
 
 /// "Seek report": an officer asks a colleague a question about an application;

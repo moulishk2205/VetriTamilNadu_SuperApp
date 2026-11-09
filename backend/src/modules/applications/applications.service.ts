@@ -122,8 +122,66 @@ export class ApplicationsService {
   async step(app: Application, officer: Officer): Promise<ApplicationStage | null> {
     const next = this.engine.next(app.stage)
     if (!next) return null
+    // At the approval stage the service's approval chain decides whether this
+    // approval completes the stage or only clears one level.
+    if (app.stage === ApplicationStage.approval && !(await this.approveLevel(app, officer))) return ApplicationStage.approval
     await this.applyTransition(app, next, officer)
     return next
+  }
+
+  /** The service's approval chain (empty = one level, any officer but the recommender). */
+  approvalChain(serviceSlug: string) {
+    return this.prisma.approvalLevel.findMany({ where: { serviceSlug }, orderBy: { level: 'asc' } })
+  }
+
+  /**
+   * Approve the current level of the chain. Each level must be approved by an
+   * officer holding that level's post, and by a different officer from every
+   * earlier level (and from the recommender). Returns true when this was the
+   * last level, so the case moves on to digital signature.
+   */
+  private async approveLevel(app: Application, officer: Officer): Promise<boolean> {
+    const chain = await this.approvalChain(app.serviceSlug)
+    const total = Math.max(1, chain.length)
+    const level = Math.min(app.approvalLevel, total)
+    const def = chain.find((l) => l.level === level)
+    if (app.makerOfficerId === officer.id) {
+      throw new ForbiddenException('Two-person rule: you recommended this case, so a different officer must approve it.')
+    }
+    if (def && def.designation !== officer.designation) {
+      throw new ForbiddenException(`Level ${level} of ${total} (${def.title}) must be approved by a ${def.designation}.`)
+    }
+    const earlier = await this.prisma.approvalAction.findFirst({ where: { applicationId: app.id, officerId: officer.id, decision: 'approved', level: { lt: level } } })
+    if (earlier) throw new ForbiddenException(`You approved level ${earlier.level}; a different officer must approve level ${level}.`)
+    await this.prisma.approvalAction.create({ data: { applicationId: app.id, level, officerId: officer.id, decision: 'approved' } })
+    if (level < total) {
+      await this.prisma.application.update({ where: { id: app.id }, data: { approvalLevel: level + 1, statusLabel: `Approval ${level + 1} of ${total}` } })
+      return false
+    }
+    return true
+  }
+
+  /** Send a case at the approval stage back to an earlier level of its chain. */
+  async returnToLevel(app: Application, level: number, officer: Officer, note?: string) {
+    if (app.stage !== ApplicationStage.approval) throw new ConflictException('Only cases awaiting approval can be returned to a level')
+    if (!Number.isInteger(level) || level < 1 || level >= app.approvalLevel) throw new BadRequestException(`Choose a level before the current one (${app.approvalLevel})`)
+    await this.prisma.approvalAction.create({ data: { applicationId: app.id, level, officerId: officer.id, decision: 'returned', note } })
+    await this.prisma.application.update({ where: { id: app.id }, data: { approvalLevel: level, statusLabel: level === 1 ? 'In Progress' : `Approval ${level}` } })
+  }
+
+  /** Chain and decisions for the review screen. */
+  async approvalStatus(app: Application) {
+    const [chain, actions] = await Promise.all([
+      this.approvalChain(app.serviceSlug),
+      this.prisma.approvalAction.findMany({ where: { applicationId: app.id }, orderBy: { at: 'asc' } }),
+    ])
+    const names = new Map((await this.prisma.officer.findMany({ where: { id: { in: actions.map((a) => a.officerId) } }, select: { id: true, name: true } })).map((o) => [o.id, o.name]))
+    const levels = (chain.length ? chain : [{ level: 1, title: 'Approval', designation: 'Any officer other than the recommender' }]).map((l) => {
+      const approved = [...actions].reverse().find((a) => a.level === l.level && a.decision === 'approved')
+      const cleared = app.stage !== ApplicationStage.approval ? !!approved : l.level < app.approvalLevel
+      return { level: l.level, title: l.title, designation: l.designation, status: cleared ? 'approved' : app.stage === ApplicationStage.approval && l.level === app.approvalLevel ? 'current' : 'pending', by: cleared && approved ? names.get(approved.officerId) ?? null : null }
+    })
+    return { current: app.stage === ApplicationStage.approval ? app.approvalLevel : null, levels, history: actions.map((a) => ({ level: a.level, decision: a.decision, by: names.get(a.officerId) ?? 'Officer', note: a.note, at: a.at.toISOString() })) }
   }
 
   /** Move an application to a target stage along a legal path (reject, correction,
